@@ -13,7 +13,9 @@ This repository is part of the [2021 IROS-RSJ Robotic Challenge for Young Studen
 
 ## Visualisation
 While mapping the environment, we also display the location of the bot on the map and the path generated from A-star that it has to follow. 
-Following is an image of the same
+Following is an image of the same.
+
+![Visualisation](img.png)
 
 ## Further Improvements
 The bot runs smoothly on some environments, but we still have to tune the controller to be more adaptive towards other scenarios.
