@@ -2,11 +2,11 @@ import casadi as ca
 import numpy as np									
 import time
 import math 
-from scipy.spatial import KDTree                          							#####                                                              
-import cv2                                                              #
+from scipy.spatial import KDTree                          							                                                           
+import cv2                                                              
 import sys
 from controller import Robot
-robot = Robot()                                                              #
+robot = Robot()                                                              
 
 pi = math.pi
 t_start = time.time()
@@ -48,25 +48,27 @@ print('Waypoints:', all_waypoints)
 current_waypoint_index = 0
 waypoint = all_waypoints[current_waypoint_index]
 
-def KDTree_func(path,x,y):														############
-   
-    minimum_dist = 100
-    minimum_index = 0
-    for l in range(0,path.shape[0]):
-        
-        if ((x-path[l][0])**2 + (y-path[l][1])**2) < minimum_dist:
-            minimum_dist = ((x-path[l][0])**2 + (y-path[l][1])**2)
-            minimum_index = l
+def KDTree_func(path,x,y):
+	minimum_dist = 100
+	minimum_index = 0
+	for l in range(0,path.shape[0]):
+		
+		if ((x-path[l][0])**2 + (y-path[l][1])**2) < minimum_dist:
+			minimum_dist = ((x-path[l][0])**2 + (y-path[l][1])**2)
+			minimum_index = l
 
-    return minimum_index
-    
+	return minimum_index
+	
 
 
 #####################################################                                                       
-grid = np.zeros(shape=(100, 100))
+grid = np.zeros(shape=(100, 100), dtype='uint8')				##########
+gridlines = np.zeros(shape=(100, 100), dtype='uint8')				#########
+dst_4 = np.zeros(shape=(100, 100))
 
-cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
+# cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
 
+"""								###########
 for i in range(100):
 	grid[i][0] = 1
 	grid[i][1] = 1
@@ -83,14 +85,14 @@ for i in range(100):
 	grid[97][i] = 1
 	grid[98][i] = 1
 	grid[99][i] = 1
-
+"""
 grid_2 = grid.copy()
 
-def getDistAndAngle(data):
-	loc = []
-	for idx in range(35,630):
-		loc.append([data[int(idx)],idx*240/667-30])
-	return loc
+# def getDistAndAngle(data):
+# 	loc = []
+# 	for idx in range(35,630):
+# 		loc.append([data[int(idx)],idx*240/667-30])
+# 	return loc
 global x_1,y_1	
 def getPointRel(angle_1,r):
 	theta_1 = angle_1*pi/180
@@ -98,11 +100,11 @@ def getPointRel(angle_1,r):
 	y_1 = r*math.sin(theta_1)+0.25
 	return x_1,y_1
 
-def transform(x2,y2,angle_2,bot_x,bot_y):
-	theta_1 = (angle_2*pi)/180
-	x2,y2=y2,x2
-	x_ = math.cos(theta_1)*x2-math.sin(theta_1)*y2
-	y_= math.sin(theta_1)*x2+math.cos(theta_1)*y2
+def transform(x,y,angle,bot_x,bot_y):									###
+	theta = angle
+	x,y=y,x
+	x_ = math.cos(theta)*x-math.sin(theta)*y
+	y_= math.sin(theta)*x+math.cos(theta)*y
 	return x_+bot_x,y_+bot_y
 
 def roundToTen(val):
@@ -255,14 +257,14 @@ class AStar:
 			self.closeList.append(minF)
 			self.openList.remove(minF)
 
-			self.searchNear(minF, -1, 1)
+			#self.searchNear(minF, -1, 1)
 			self.searchNear(minF, 0, 1)
-			self.searchNear(minF, 1, 1)
+			#self.searchNear(minF, 1, 1)
 			self.searchNear(minF, -1, 0)
 			self.searchNear(minF, 1, 0)
-			self.searchNear(minF, -1, -1)
+			#self.searchNear(minF, -1, -1)
 			self.searchNear(minF, 0, -1)
-			self.searchNear(minF, 1, -1)
+			#self.searchNear(minF, 1, -1)
 
 			'''
 			self.searchNear(minF,0,-1)
@@ -301,28 +303,29 @@ IU.enable(timestep)
 n_states = 3
 n_controls = 2
 
-ld = robot.getDevice('Hokuyo URG-04LX-UG01')                                #
+ld = robot.getDevice('Hokuyo URG-04LX-UG01')                                
 ld.enable(timestep)
-														 #   
-ld.enablePointCloud()                                                       #
-ld.getHorizontalResolution()                                                #
+															
+ld.enablePointCloud()                                                       
+ld.getHorizontalResolution()                                                
 
 
 N = 12         
 #delta_T = 0.2                                                                                          
-n_pts_picked  = 15                                                                                                 #
-d_reastar = 0.8                                                                                                 #
-wall_extra_width = 4																#
-a_star_correction_search_window = 0													#
-waypoint_change_dist = 0.75078930665															#
-U_ref = np.array([0.85,0], dtype ='f')#0.85								   
+n_pts_picked  = 15                                                                                                
+d_reastar = 0.8                                                                                                 
+wall_extra_width = 4                                            																
+a_star_correction_search_window = 0													
+waypoint_change_dist = 0.1#0.75078930665				#################											
+U_ref = np.array([0.8,0], dtype ='f')#0.85								   
 error_allowed = 2e-1                                                                                                                                                                    
 
-Q_x = 100000    
-Q_y = 100000
-Q_theta =  200#5                                                                                                                                              
+Q_x = 100000 #1000000*120#100000                                                ############### changed tuning
+Q_y = 100000 #1000000*120
+Q_theta = 250#50000*10	#250                                                                                                                                              
 R1 = 0.00001    
-R2 = 250                                                                                                          
+R2 = 250#400000#400000#250       
+
 
 error_allowed_in_g = 1e-100   
 
@@ -336,82 +339,102 @@ theta_bound_min = -inf
 omega_wheel_max = 10.15
 robot_dia = 0.5
 wheel_rad = 0.15
-v_max =1#1#omega_wheel_max*wheel_rad                                 
-v_min = 0.0001#-v_max    
+v_max =0.8#1#omega_wheel_max*wheel_rad                                 
+v_min = 0#0.0001#-v_max    
 omega_max = omega_wheel_max*wheel_rad/robot_dia                                                
 omega_min = -omega_max
 
 global x,y,theta,V,omega, theta_2
 
-path=np.zeros((n_pts_picked,2))                                               ############
+path=np.zeros((n_pts_picked,2))                                               
+
+for i in range(0,100):										#
+	for j in range(0,100):	#									
+		if(i%10==0 or j%10==0):#
+			gridlines[i][j]=1#
+
 
 
 while (robot.step(timestep) != -1):     
 	x = gps.getValues()[0]
 	y = gps.getValues()[1]
-	# theta =IU.getRollPitchYaw()[0]  + pi/2  ## Commented
-	# if theta > pi:
-	# 	theta = theta - 2*pi
-
-	theta =IU.getRollPitchYaw()[2]  ## Changed to 2
-	theta_2=IU.getRollPitchYaw()[2]
+	theta =IU.getRollPitchYaw()[0]  + pi/2  ## Commented
+	if theta > pi:
+		theta = theta - 2*pi
+	theta_2 = theta
+	#theta =IU.getRollPitchYaw()[2]  ## Changed to 2
+	#theta_2=IU.getRollPitchYaw()[2]
 
 
 
 
 	
 	#############################################################
-	lidar_values = ld.getRangeImageArray()                                                          #
-	loc =getDistAndAngle(lidar_values)
-	X=[]
-	Y=[]
-	coords=[]
-
-	for dist,angle in loc:
-		dist = dist[0]
-		
-		if(dist==np.inf):
-			dist= -1000
-		coordRel = getPointRel(angle,dist) 
-		X.append(coordRel[0])
-		Y.append(coordRel[1])
-		coords.append(coordRel)
-		
+	lidar_values = ld.getRangeImageArray()  
+		###### 
 	bot_x = x
 	bot_y = y
-	bot_theta = (theta_2*180)/pi
-	
-	for val in coords:
-		x1,y1 = transform(val[0],val[1],bot_theta,bot_x,bot_y)
-		x_int= int((x1+5)*10)
-		y_int = int((y1+5)*10)
-	# print((x_int,y_int)
-		x_temp = x_int
-		y_temp=y_int
-		if(x_int<100 and y_int<100 and x_int>=0 and y_int>=0):
-			if(x_int%10==1):
-				x_temp-=1
-			if(y_int%10==1):
-				y_temp-=1
-			if(x_int%10==9):
-				x_temp+=1
-			if(y_int%10==9):
-				y_temp+=1
-			if(x_temp%10==0 or y_temp%10==0):
-				for i in range(-1 * wall_extra_width, wall_extra_width + 1):
-					for j in range(-1 * wall_extra_width, wall_extra_width + 1):
-						if(x_temp+i<100 and y_temp+j<100 and x_temp+i>=0 and y_temp+j>=0):
-							grid[x_temp+i][y_temp+j]=1
-							grid_2[x_temp+i][y_temp+j]=1	 
+	bot_theta = theta_2                                                       
+	for idx in range(35,635, 3):							
+		if lidar_values[int(idx)][0] <= 3.0:
+			# print('HERE')
+			dist, angle = lidar_values[int(idx)], idx*240/666-30
+			dist = dist[0]
+			if(dist==np.inf):
+				dist= -1000
 
-	# cv2.imshow('w1',(grid*255).astype('uint8'))
+			coordRel = getPointRel(angle,dist)
+			x,y = transform(coordRel[0],coordRel[1],bot_theta,bot_x,bot_y)
+			x_int= int((x+5)*10+0.5)
+			y_int = int((y+5)*10+0.5)
+			# X.append(x_int)
+			# Y.append(y_int)
+			x_temp = x_int
+			y_temp=y_int
+			if(x_int<100 and y_int<100 and x_int>=0 and y_int>=0):
+				grid[x_int][y_int]=1
+	dst = grid & gridlines      
+
+	dst_2 = np.copy(dst)
+	for i in range(1, 99):
+		for j in range(1, 99):
+			middle_sum = dst[i][j] + dst[i-1][j] + dst[i+1][j] + dst[i][j-1] + dst[i][j+1] #+ dst[i-2][j] + dst[i+2][j] + dst[i][j-2] + dst[i][j+2]
+			corner_sum = dst[i-1][j-1] + dst[i+1][j+1] + dst[i-1][j+1] + dst[i+1][j-1] #+ dst[i-2][j-2] + dst[i+2][j+2] + dst[i-2][j+2] + dst[i+2][j-2]
+			
+			if not(middle_sum >= 2 and corner_sum == 0):
+				dst_2[i][j] = 0
+
+	grid = np.copy(dst_2)													
+	dst_3 = np.copy(dst_2)
+
+	for i in range(1, 99):
+		for j in range(1, 99):
+			if(dst_2[i][j] == 1):
+				for k in range(-1 * wall_extra_width, wall_extra_width + 1):
+					for l in range(-1 * wall_extra_width, wall_extra_width + 1):
+						if (i + k < 100 and i + k >= 0 and j + l < 100 and j + l >=0):
+							dst_3[i+k][j+l] = 1
+	
+	# dst = dst_2
+
+	for i in range(100):
+		for j in range(4):
+			dst_3[i][j] = 1
+			dst_3[i][100 - j - 1] = 1
+			dst_3[j][i] = 1
+			dst_3[100 - j - 1][i] = 1
+		
+		dst_3[4][i] = 1
+		#############
+
+	# cv2.imshow('w1',(dst_3*255).astype('uint8'))                  #
 	# cv2.waitKey(1)
 
-	size=grid.shape
+	size=dst_3.shape#grid.shape						#
 	map2d = Array2D(size[0], size[1])
 	for i in range(size[0]):
 		for j in range(size[1]):
-			map2d[i][j]=grid[j][i]
+			map2d[i][j]=dst_3[j][i]#grid[j][i]			#
 	   
 		
 	
@@ -420,15 +443,18 @@ while (robot.step(timestep) != -1):
 
 	if len(all_waypoints) > 1:
 		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= waypoint_change_dist):
-			for i__ in range(len(all_waypoints)):
+			for i__ in range(len(all_waypoints)-1):                                                                                                         #####
 				if (np.sqrt(abs(bot_x - all_waypoints[i__][0]) ** 2 + abs(bot_y - all_waypoints[i__][1]) ** 2) <= waypoint_change_dist):
 					all_waypoints.pop(i__)
 					i__ -= 1
 					break
 
-			if len(all_waypoints):
-				current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+			if len(all_waypoints) > 1 :                                                                                                                     ###########    
+				current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                                     #########
 				waypoint = all_waypoints[current_waypoint_index]
+
+			else:                                                                                                                                               ##########
+			    waypoint = all_waypoints[0] 	                                                                                                                #########
 	
 	else:
 		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= 1e-1):
@@ -444,11 +470,11 @@ while (robot.step(timestep) != -1):
 				waypoint = all_waypoints[current_waypoint_index]
 
 	## check pstart in obstacle
-	if grid[int(x1)][int(y1)] == 1:
+	if dst_3[int(x1)][int(y1)] == 1:#grid[int(x1)][int(y1)] == 1:									#
 		for j in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
 			flag = 0
 			for k in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
-				if grid[int(x1) + j][int(y1) + k] == 0:
+				if dst_3[int(x1) + j][int(y1) + k] == 0:#grid[int(x1) + j][int(y1) + k] == 0:					#
 					x1 = int(x1) + j
 					y1 = int(y1) + k
 					flag = 1
@@ -458,9 +484,10 @@ while (robot.step(timestep) != -1):
 	
 	# print(np.array([x1, y1]))
 	# print(KDTree((np.array(all_waypoints) + 5) * 10).query(np.array([x1, y1])))
-	if KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:										########
-		current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+	if KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:										
+		current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]
 		waypoint = all_waypoints[current_waypoint_index]
+		print(waypoint)
 
 
 	pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
@@ -469,14 +496,15 @@ while (robot.step(timestep) != -1):
 	pathList = aStar.start()
 	#path=np.zeros((30,2), dtype ='f')	
 	if pathList:
-		path[0][0] = int(x1)                                                    #######
-		path[0][1] = int(y1)                                                    ######
-		i=1#0                                                                   ######
+		path[0][0] = int(x1)                                                    
+		path[0][1] = int(y1)                                                    
+		i=1#0                                                                  
 		for point in pathList:
 			if i==n_pts_picked:
 				break
 			path[i][0]= float(point.y)
 			path[i][1]= float(point.x)
+			dst_4[int(point.y)][int(point.x)] = 0.75
 			i=i+1
 		
 		if i<n_pts_picked:
@@ -496,8 +524,8 @@ while (robot.step(timestep) != -1):
 
 
 global total_path_points												#  """??"""      
-total_path_points = path.shape[0]                                                                      #												
-#path = np.zeros((95,2))	                                                                            #										
+total_path_points = path.shape[0]                                                                      												
+#path = np.zeros((95,2))	                                                                            										
 
 
 
@@ -577,8 +605,7 @@ ubx[(n_bound_var*(N+1)+1):(n_bound_var*(N+1)+n_controls*N):2] = omega_max
 
 X_init = np.array([x,y,theta], dtype = 'f')                                                                                                                                                                                    
 #X_target = np.array([ path[total_path_points-1][0], path[total_path_points-1][1], 0 ]  , dtype = 'f')                        #   """???"""  
-path_last = np.array([ path[total_path_points-1][0], path[total_path_points-1][1]]  , dtype = 'f')                        ###############
-
+path_last = np.array([ path[total_path_points-1][0], path[total_path_points-1][1]]  , dtype = 'f')                        
 
 P = X_init                                                                                       
 
@@ -586,7 +613,7 @@ close_index = KDTree_func(path,x,y)#KDTree(path).query(P[0:n_states-1])[1]
 
 for i in range(0,N):                                                                              
 	P = ca.vertcat(P,path[close_index+i,0:2])                                                          
-	P = ca.vertcat(P, math.atan((path[close_index+i+1][1] - path[close_index+i][1])/(path[close_index+i+1][0] - path[close_index+i][0]+ 1e-9)) )    ######     
+	P = ca.vertcat(P, math.atan((path[close_index+i+1][1] - path[close_index+i][1])/(path[close_index+i+1][0] - path[close_index+i][0]+ 1e-9)) )        
 
 for i in range(0,N):                                                                              
 	P = ca.vertcat(P, U_ref[0])                                                                   
@@ -603,8 +630,8 @@ initial_con = ca.DM.zeros((n_controls*N,1))
 n_iter = 0
 """???"""  
 pStart, pEnd = Point(0, 0), Point(0, 0)
-#while ( ca.norm_2( P[0:n_states-1].reshape((n_states-1,1)) - X_target[0:n_states-1] ) > error_allowed and robot.step(timestep) != -1 ):    				#                                       
-counter = 0                                                                                                                                                            #
+#while ( ca.norm_2( P[0:n_states-1].reshape((n_states-1,1)) - X_target[0:n_states-1] ) > error_allowed and robot.step(timestep) != -1 ):    				                                       
+counter = 0                                                                                                                                                            
 while ( robot.step(timestep) != -1 ): 
 	n_iter += 1 
 	args = {
@@ -633,98 +660,125 @@ while ( robot.step(timestep) != -1 ):
 	omega_left_wheel = (V -omega*robot_dia)/wheel_rad                         
 	omega_right_wheel = (V +omega*robot_dia)/wheel_rad
 
-	omega_left_wheel = min(omega_left_wheel, omega_wheel_max)               #
-	omega_left_wheel = max(omega_left_wheel, -1 * omega_wheel_max)          #
-	omega_right_wheel = min(omega_right_wheel, omega_wheel_max)             #
-	omega_right_wheel = max(omega_right_wheel, -1 * omega_wheel_max)        #
+	omega_left_wheel = min(omega_left_wheel, omega_wheel_max)               
+	omega_left_wheel = max(omega_left_wheel, -1 * omega_wheel_max)          
+	omega_right_wheel = min(omega_right_wheel, omega_wheel_max)             
+	omega_right_wheel = max(omega_right_wheel, -1 * omega_wheel_max)        
 
 	motor_left.setVelocity(omega_left_wheel)             
 	motor_right.setVelocity(omega_right_wheel)           
 	x = gps.getValues()[0]
 	y = gps.getValues()[1]  
 	# print('X: ', x, ', Y:  ', y)                                                     
-	# theta =IU.getRollPitchYaw()[0] + pi/2              ## Commented                           
-	# if theta > pi :
-	# 	theta = theta - 2*pi
-	theta =IU.getRollPitchYaw()[2]   ## Changed to 2
-	theta_2 = IU.getRollPitchYaw()[2]
+	theta =IU.getRollPitchYaw()[0] + pi/2              ## Commented                           
+	if theta > pi :
+		theta = theta - 2*pi
+	theta_2 = theta
+	#theta =IU.getRollPitchYaw()[2]   ## Changed to 2
+	#theta_2 = IU.getRollPitchYaw()[2]
 	P[0:n_states] =([x,y,theta]) 
 
 	
 		#############################################################
-	lidar_values = ld.getRangeImageArray()                                                          #
-	loc =getDistAndAngle(lidar_values)
-	X=[]
-	Y=[]
-	coords=[]
-
-	for dist,angle in loc:
-		dist = dist[0]
-		
-		if(dist==np.inf):
-			dist= -1000
-		coordRel = getPointRel(angle,dist) 
-		X.append(coordRel[0])
-		Y.append(coordRel[1])
-		coords.append(coordRel)
-		
+	lidar_values = ld.getRangeImageArray()                                                         
+	
+		######                                                        
 	bot_x = x
+	
 	bot_y = y
-	bot_theta = (theta_2*180)/pi
-	# print(bot_x, bot_y)
 	
-	
-	for val in coords:
-		x1,y1 = transform(val[0],val[1],bot_theta,bot_x,bot_y)
-		x_int= int((x1+5)*10)
-		y_int = int((y1+5)*10)
-		# print((x_int,y_int)
-		x_temp = x_int
-		y_temp=y_int
-		if(x_int<100 and y_int<100 and x_int>=0 and y_int>=0):
-			if(x_int%10==1):
-				x_temp-=1
-			if(y_int%10==1):
-				y_temp-=1
-			if(x_int%10==9):
-				x_temp+=1
-			if(y_int%10==9):
-				y_temp+=1
-			if(x_temp%10==0 or y_temp%10==0):
-				for i in range(-1 * wall_extra_width, wall_extra_width + 1):
-					for j in range(-1 * wall_extra_width, wall_extra_width + 1):
-						if(x_temp+i<100 and y_temp+j<100 and x_temp+i>=0 and y_temp+j>=0):
-							grid[x_temp+i][y_temp+j]=1
-							grid_2[x_temp+i][y_temp+j]=1	 
-	
-	
-	x_bot_grid=int((bot_x+5)*10 + 0.5)
-	y_bot_grid=int((bot_y+5)*10 + 0.5)
-	grid_2[x_bot_grid][y_bot_grid] = 0.5
+	bot_theta = theta_2
 
-	cv2.imwrite('img1.png',(grid*255).astype('uint8'))
-	cv2.waitKey(1)
+	for idx in range(35,635, 3):							
+		if lidar_values[int(idx)][0] <= 3.0:
+			# print('HERE')
+			dist, angle = lidar_values[int(idx)], idx*240/666-30
+			dist = dist[0]
+			if(dist==np.inf):
+				dist= -1000
 
-	if (ca.norm_2( P[0:n_states-1].reshape((n_states-1,1)) - path_last[0:n_states-1] ) < d_reastar) or counter >= 1000:     ####
+			coordRel = getPointRel(angle,dist)
+			x,y = transform(coordRel[0],coordRel[1],bot_theta,bot_x,bot_y)
+			x_int= int((x+5)*10+0.5)
+			y_int = int((y+5)*10+0.5)
+			# X.append(x_int)
+			# Y.append(y_int)
+			x_temp = x_int
+			y_temp=y_int
+			if(x_int<100 and y_int<100 and x_int>=0 and y_int>=0):
+				grid[x_int][y_int]=1
+	dst = grid & gridlines      
+
+	dst_2 = np.copy(dst)
+	for i in range(1, 99):
+		for j in range(1, 99):
+			middle_sum = dst[i][j] + dst[i-1][j] + dst[i+1][j] + dst[i][j-1] + dst[i][j+1] #+ dst[i-2][j] + dst[i+2][j] + dst[i][j-2] + dst[i][j+2]
+			corner_sum = dst[i-1][j-1] + dst[i+1][j+1] + dst[i-1][j+1] + dst[i+1][j-1] #+ dst[i-2][j-2] + dst[i+2][j+2] + dst[i-2][j+2] + dst[i+2][j-2]
+			
+			if not(middle_sum >= 2 and corner_sum == 0):
+				dst_2[i][j] = 0
+
+	grid = np.copy(dst_2)
+	dst_3 = np.copy(dst_2)
+
+	for i in range(1, 99):
+		for j in range(1, 99):
+			if(dst_2[i][j] == 1):
+				for k in range(-1 * wall_extra_width, wall_extra_width + 1):
+					for l in range(-1 * wall_extra_width, wall_extra_width + 1):
+						if (i + k < 100 and i + k >= 0 and j + l < 100 and j + l >=0):
+							dst_3[i+k][j+l] = 1
+	
+	# dst = dst_2
+	
+	for i in range(100):
+		for j in range(4):
+			dst_3[i][j] = 1
+			dst_3[i][100 - j - 1] = 1
+			dst_3[j][i] = 1
+			dst_3[100 - j - 1][i] = 1
+		
+		dst_3[4][i] = 1
+
+	# dst_4 = np.copy(dst_3).astype("float")				#
+
+	for i in range(100):
+		for j in range(100):
+			if (dst_3[i][j] == 1):
+				dst_4[i][j] = 1
+			else:
+				if (dst_4[i][j] == 1):
+					dst_4[i][j] = 0
+	
+	x_bot_grid=int((bot_x+5)*10 + 0.5)				
+	y_bot_grid=int((bot_y+5)*10 + 0.5)				
+	dst_4[x_bot_grid][y_bot_grid] = 0.5                     #
+
+		#############
+
+	# cv2.imwrite('img1.png',(dst_4*255).astype('uint8'))
+	# cv2.waitKey(1)
+
+	if (ca.norm_2( P[0:n_states-1].reshape((n_states-1,1)) - path_last[0:n_states-1] ) < d_reastar) or counter >= 1000:     
 		#size=grid.shape
-		counter = 0																		######
+		counter = 0																		
 		print('HERE')
 		map2d = Array2D(size[0], size[1])
 		for i in range(size[0]):
 			for j in range(size[1]):
-				map2d[i][j]=grid[j][i]
+				map2d[i][j]=dst_3[j][i]     #
 		   
 			
 		
-		x1=(bot_x+5)*10 + 0.5
-		y1=(bot_y+5)*10 + 0.5
+		x1=(bot_x+5)*10 + 0.5                  
+		y1=(bot_y+5)*10 + 0.5                   				
 
 		## check pstart in obstacle
-		if grid[int(x1)][int(y1)] == 1:
+		if dst_3[int(x1)][int(y1)] == 1:    #
 			for j in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
 				flag = 0
 				for k in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
-					if grid[int(x1) + j][int(y1) + k] == 0:
+					if dst_3[int(x1) + j][int(y1) + k] == 0:
 						x1 = int(x1) + j
 						y1 = int(y1) + k
 						flag = 1
@@ -733,8 +787,8 @@ while ( robot.step(timestep) != -1 ):
 					break			
 		
 		
-		if current_waypoint_index == KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:
-			current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+		if current_waypoint_index == KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:              ######
+			current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                #######     
 			waypoint = all_waypoints[current_waypoint_index]
 		
 		print('Current Waypoint: ', waypoint)
@@ -752,15 +806,15 @@ while ( robot.step(timestep) != -1 ):
 		pathList = aStar.start()
 		#path=np.zeros((30,2), dtype ='f')	
 		if pathList:
-			path[0][0] = int(x1)                                                    #######
-			path[0][1] = int(y1)                                                    ######
-			i=1#0                                                                   ######			
+			path[0][0] = int(x1)                                                   
+			path[0][1] = int(y1)                                                   
+			i=1#0                                                                   			
 			for point in pathList:
 				if i==n_pts_picked:
 					break
 				path[i][0]= float(point.y)
 				path[i][1]= float(point.x)
-				grid_2[int(point.y)][int(point.x)] = 0.75   ####
+				dst_4[int(point.y)][int(point.x)] = 0.75   ####
 				i=i+1
 			print(i)
 			# if i<n_pts_picked:
@@ -792,7 +846,7 @@ while ( robot.step(timestep) != -1 ):
 			path = np.divide(path,10)
 			path = np.subtract(path,5)
 
-			path_last =  path[total_path_points-1,0:2]                               ############
+			path_last =  path[total_path_points-1,0:2]                              
 			#print( path_last ,"      ",waypoint
 			
 			# if ca.norm_2(path_last - waypoint) < 2.5:
@@ -807,11 +861,11 @@ while ( robot.step(timestep) != -1 ):
 
 
 	else:
-		counter += 1																#####
+		counter += 1																
 		############################################################
 
-	x1=(bot_x+5)*10 + 0.5
-	y1=(bot_y+5)*10 + 0.5
+	x1=(bot_x+5)*10 + 0.5     
+	y1=(bot_y+5)*10 + 0.5     
 	pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
 	# if (abs(pStart.x - pEnd.x) <= waypoint_change_dist and abs(pStart.y - pEnd.y) <= waypoint_change_dist):
 	if len(all_waypoints) > 1:
@@ -821,16 +875,18 @@ while ( robot.step(timestep) != -1 ):
 			# 	waypoint = all_waypoints[current_waypoint_index]
 			# 	pEnd = Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
 
-			for i__ in range(len(all_waypoints)):
+			for i__ in range(len(all_waypoints)-1):                                                                                             #########
 				# print(i__)
 				if (np.sqrt(abs(bot_x - all_waypoints[i__][0]) ** 2 + abs(bot_y - all_waypoints[i__][1]) ** 2) <= waypoint_change_dist):
 					all_waypoints.pop(i__)
 					i__ -= 1
 					break
 
-			if len(all_waypoints):
-				current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+			if len(all_waypoints) >1:                                                                                                              ####### 
+				current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]    #####
 				waypoint = all_waypoints[current_waypoint_index]
+			else:
+			    waypoint = all_waypoints[-1]                                                                                                           ####	
 	
 	else:
 		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= 0.25):
@@ -851,8 +907,8 @@ while ( robot.step(timestep) != -1 ):
 				waypoint = all_waypoints[current_waypoint_index]
 
 
-	cv2.imshow('w1',(grid_2*255).astype('uint8'))
-	cv2.waitKey(1)
+	# cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
+	# cv2.waitKey(1)
 
 
 	if(len(all_waypoints) == 0):
@@ -864,7 +920,7 @@ while ( robot.step(timestep) != -1 ):
 	# print(close_index)	
 	#if KDTree_func(path,x,y)  != close_index:                                               
 	close_index = KDTree_func(path,x,y)#KDTree(path).query(P[0:n_states-1])[1] 
-	print (close_index)
+	# print (close_index)
 										
 
 	if N+(close_index) < total_path_points : #and N+(close_index-1) < total_U_points                                    
@@ -876,21 +932,21 @@ while ( robot.step(timestep) != -1 ):
 		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                              
 		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                     
 		"""
-		P[n_states:n_states*(N+1):3] = path[close_index:N+close_index,0]                    ############
-		P[n_states+1:n_states*(N+1):3] = path[close_index:N+close_index,1]                  ###########
+		P[n_states:n_states*(N+1):3] = path[close_index:N+close_index,0]                    
+		P[n_states+1:n_states*(N+1):3] = path[close_index:N+close_index,1]                  
 
-		for i in range(0,N):                                                                ###########
-			P[n_states*(i+1+1)-1] = math.atan( (path[i+close_index+1][1] - path[i+close_index][1])/(path[i+close_index+1][0] - path[i+close_index][0] + 1e-9) )           ########### 
+		for i in range(0,N):                                                                
+			P[n_states*(i+1+1)-1] = math.atan( (path[i+close_index+1][1] - path[i+close_index][1])/(path[i+close_index+1][0] - path[i+close_index][0] + 1e-9) )           
 		  
-		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]  ###
-		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                            ########     			"""								
+		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]  
+		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                 			"""								
 		
 	
 	else:
 		#print( "ELSEEEEEEEEE  ", close_index,"   ", P[n_states:n_states*2])
 		P[n_states:n_states*(N)] = P[n_states*2:n_states*(N+1)]                                                                     
 		P[n_states*(N):n_states*(N+1)-1] = path[(total_path_points-1),0:2]                                                                                                                                                                                                                      
-		P[n_states*(N+1)-1] = math.atan( (path[total_path_points-1][1] - path[total_path_points-1-1][1])/(path[total_path_points-1][0] - path[total_path_points-1-1][0]+ 1e-9) )    ###########
+		P[n_states*(N+1)-1] = math.atan( (path[total_path_points-1][1] - path[total_path_points-1-1][1])/(path[total_path_points-1][0] - path[total_path_points-1-1][0]+ 1e-9) )    
 		
 		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                                  
 		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                      
@@ -912,3 +968,19 @@ t_end = time.time()
 print( "Total Time taken = " , t_end - t_start)
 motor_left.setVelocity(0)             
 motor_right.setVelocity(0)            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
