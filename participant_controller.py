@@ -120,7 +120,7 @@ def roundToTen(val):
 # 		if(i%10==0 or j%10==0):
 # 			grid[i][j]=0
 			
-cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
+# cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
 
 class Array2D:
 
@@ -478,13 +478,14 @@ while (robot.step(timestep) != -1):
 	# dst = dst_2
 
 	for i in range(100):
-		for j in range(4):
+		for j in range(3):
 			dst_3[i][j] = 1
 			dst_3[i][100 - j - 1] = 1
 			dst_3[j][i] = 1
 			dst_3[100 - j - 1][i] = 1
 		
 		dst_3[4][i] = 1
+		dst_3[3][i] = 1
 		#############
 
 	# cv2.imshow('w1',(dst_3*255).astype('uint8'))                  #
@@ -802,13 +803,14 @@ while ( robot.step(timestep) != -1 ):
 	# dst = dst_2
 	
 	for i in range(100):
-		for j in range(4):
+		for j in range(3):
 			dst_3[i][j] = 1
 			dst_3[i][100 - j - 1] = 1
 			dst_3[j][i] = 1
 			dst_3[100 - j - 1][i] = 1
 		
 		dst_3[4][i] = 1
+		dst_3[3][i] = 1
 
 	# dst_4 = np.copy(dst_3).astype("float")				#
 
@@ -832,7 +834,7 @@ while ( robot.step(timestep) != -1 ):
 	if (ca.norm_2( P[0:n_states-1].reshape((n_states-1,1)) - path_last[0:n_states-1] ) < d_reastar) or counter >= 1000:     
 		#size=grid.shape
 		counter = 0																		
-		print('HERE')
+		# print('HERE')
 		map2d = Array2D(size[0], size[1])
 		for i in range(size[0]):
 			for j in range(size[1]):
@@ -981,8 +983,8 @@ while ( robot.step(timestep) != -1 ):
 				waypoint = all_waypoints[current_waypoint_index]
 
 
-	cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
-	cv2.waitKey(1)
+	# cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
+	# cv2.waitKey(1)
 
 
 	if(len(all_waypoints) == 0):
@@ -1028,7 +1030,7 @@ while ( robot.step(timestep) != -1 ):
 
 
 	# print( "Odometry = " , P[0:n_states]
-	print( V, "    ", omega )
+	# print( V, "    ", omega )
 
 	#####################################  # HARD CODED UTURN
 	if zero_V_flag == 1:
@@ -1036,7 +1038,7 @@ while ( robot.step(timestep) != -1 ):
 		motor_right.setVelocity(0)            
 		zero_V_flag = 0
 
-	if V < 0.05 and omega < 0.001:
+	if V < 0.05 and omega < 0.005:
 		n_stopped += 1
 		print (n_stopped)
 
@@ -1046,12 +1048,12 @@ while ( robot.step(timestep) != -1 ):
 	
  
 
-	if n_stopped > 50 and u_turn_flag == 0  :
+	if n_stopped > 100 and u_turn_flag == 0  :
 		print ("BACKING UP")
 		motor_left.setVelocity(-10)             
 		motor_right.setVelocity(-10) 
 
-		if omega > 0.005 and n_stopped > 121:
+		if omega > 0.005 and n_stopped > 171:
 			u_turn_flag = 1
 			n_stopped = 0 
 			zero_V_flag = 1
