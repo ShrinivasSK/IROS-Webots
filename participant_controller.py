@@ -60,6 +60,24 @@ def KDTree_func(path,x,y):
 	return minimum_index
 	
 
+def ManhattanDistance(x1, y1, x2, y2): 																			#################
+	return abs(x1 - x2) + abs(y1 - y2)																			#################
+
+
+def FindNearestPoint(points_list, query):																		#################
+	min_distance = 10**10																
+	min_distance_index = -1
+	for i in range(len(points_list)):
+		distance = ManhattanDistance(points_list[i][0], points_list[i][1], query[0], query[1])
+		distance = int( (distance / 10) + 0.5)
+		print('i: ', i, ', Distance: ', distance)
+
+		if distance < min_distance:
+			min_distance = distance
+			min_distance_index = i
+
+	return min_distance_index
+
 
 #####################################################                                                       
 grid = np.zeros(shape=(100, 100), dtype='uint8')				##########
@@ -249,6 +267,60 @@ class AStar:
 			for xy in barrierxy:
 				self.setNearOnce(xy[0], xy[1])
 
+	def correctPath(self,path):													################
+		i=0
+		while(i<len(path)-2):
+			prev = path[i]
+			cur=path[i+1]
+			next=path[i+2]
+			if(prev.x==cur.x and cur.x==next.x):
+				prev.x=prev.x-prev.x%10+5
+				path[i]=prev
+			elif(prev.y==cur.y and cur.y==next.y):
+				prev.y=prev.y-prev.y%10+5
+				path[i]=prev
+			else:
+			## L case
+				if(prev.x==cur.x):
+					## first horizontal 
+					## second vertical
+					prev.x=prev.x-prev.x%10+5
+					cur.x=cur.x-cur.x%10+5
+					cur.y = cur.y - cur.y%10+5
+				else:
+					## first vertical 
+					## second horizontal
+					prev.y=prev.y-prev.y%10+5
+					cur.x=cur.x-cur.x%10+5
+					cur.y = cur.y - cur.y%10+5
+				path[i]=prev
+				path[i+1]=cur
+				i+=1
+			i+=1
+		if i == len(path) - 2:
+			cur=path[i]
+			next=path[i+1]
+			if(cur.x==next.x):
+				cur.x=cur.x-cur.x%10+5
+				next.x = next.x-next.x%10+5
+			else:
+				cur.y=cur.y-cur.y%10+5
+				next.y = next.y-next.y%10+5
+			path[i]=cur
+			path[i+1]=next
+		else:
+			cur=path[i-1]
+			next=path[i]
+			if(cur.x==next.x):
+				cur.x=cur.x-cur.x%10+5
+				next.x = next.x-next.x%10+5
+			else:
+				cur.y=cur.y-cur.y%10+5
+				next.y = next.y-next.y%10+5
+			path[i-1]=cur
+			path[i]=next
+		return path
+
 	def start(self):
 		startNode = AStar.Node(self.startPoint, self.endPoint)
 		self.openList.append(startNode)
@@ -284,7 +356,7 @@ class AStar:
 						# print((pathList)
 						# print((list(reversed(pathList)))
 						# print((pathList.reverse())
-						return list(reversed(pathList))
+						return self.correctPath(list(reversed(pathList)))				############
 			if len(self.openList) == 0:
 				return None
 ###############################################
@@ -310,21 +382,25 @@ ld.enablePointCloud()
 ld.getHorizontalResolution()                                                
 
 
-N = 12         
+N = 9#12         
 #delta_T = 0.2                                                                                          
-n_pts_picked  = 15                                                                                                
-d_reastar = 0.8                                                                                                 
-wall_extra_width = 4                                            																
+n_pts_picked  = 10#10#15                                                                                                
+d_reastar = 0.1#0.8                                                                                                 
+wall_extra_width = 3                                            																
 a_star_correction_search_window = 0													
-waypoint_change_dist = 0.1#0.75078930665				#################											
-U_ref = np.array([0.8,0], dtype ='f')#0.85								   
+waypoint_change_dist = 0.75078930665				#################											
+U_ref = np.array([0.4,0], dtype ='f')#0.85								   
 error_allowed = 2e-1                                                                                                                                                                    
 
-Q_x = 100000 #1000000*120#100000                                                ############### changed tuning
-Q_y = 100000 #1000000*120
-Q_theta = 250#50000*10	#250                                                                                                                                              
+Q_x = 10000000000000#100000                                                ############### changed tuning
+Q_y = 10000000000000#100000
+Q_theta =   5000000000#500000000#5#250                                                                                                                                              
+Q_x_2 = 0                                                                               ###################
+Q_y_2 =  0                                                                              ##################
+Q_theta_2 = 5000000000                                                                                    #################
 R1 = 0.00001    
-R2 = 250#400000#400000#250       
+R2 = 4000000000*1.5#250       
+
 
 
 error_allowed_in_g = 1e-100   
@@ -339,7 +415,7 @@ theta_bound_min = -inf
 omega_wheel_max = 10.15
 robot_dia = 0.5
 wheel_rad = 0.15
-v_max =0.8#1#omega_wheel_max*wheel_rad                                 
+v_max =0.4#1#omega_wheel_max*wheel_rad                                 
 v_min = 0#0.0001#-v_max    
 omega_max = omega_wheel_max*wheel_rad/robot_dia                                                
 omega_min = -omega_max
@@ -450,8 +526,10 @@ while (robot.step(timestep) != -1):
 					break
 
 			if len(all_waypoints) > 1 :                                                                                                                     ###########    
-				current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                                     #########
-				waypoint = all_waypoints[current_waypoint_index]
+				# current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                                     #########
+				# waypoint = all_waypoints[current_waypoint_index]
+				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
+				waypoint = all_waypoints[current_waypoint_index]														#############
 
 			else:                                                                                                                                               ##########
 			    waypoint = all_waypoints[0] 	                                                                                                                #########
@@ -466,8 +544,10 @@ while (robot.step(timestep) != -1):
 					break
 
 			if len(all_waypoints):
-				current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
-				waypoint = all_waypoints[current_waypoint_index]
+				# current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+				# waypoint = all_waypoints[current_waypoint_index]
+				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
+				waypoint = all_waypoints[current_waypoint_index]														#############
 
 	## check pstart in obstacle
 	if dst_3[int(x1)][int(y1)] == 1:#grid[int(x1)][int(y1)] == 1:									#
@@ -484,10 +564,14 @@ while (robot.step(timestep) != -1):
 	
 	# print(np.array([x1, y1]))
 	# print(KDTree((np.array(all_waypoints) + 5) * 10).query(np.array([x1, y1])))
-	if KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:										
-		current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]
-		waypoint = all_waypoints[current_waypoint_index]
-		print(waypoint)
+	# if KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:										
+	# 	current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]
+	# 	waypoint = all_waypoints[current_waypoint_index]
+	# 	print(waypoint)
+	if FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1]) != current_waypoint_index:			#############
+		current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
+		waypoint = all_waypoints[current_waypoint_index]														#############
+		print(waypoint)																							#############
 
 
 	pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
@@ -549,11 +633,20 @@ P = ca.SX.sym('P',1, n_states + n_states*(N) + n_controls*(N))
 X =ca.SX.sym('X', n_states, N+1)
 obj = 0
 g = []
-Q = ca.diagcat(Q_x, Q_y,Q_theta)                                                                                                                                                                         
+Q = ca.diagcat(Q_x, Q_y,Q_theta)    
+                                                                                                                                                                     
+Q_2 = ca.diagcat(Q_x_2, Q_y_2,Q_theta_2)                                                                                                            #####################################                                                                                                                                                                        
+
 R = ca.diagcat(R1, R2)                                                                                         
-for i in range(0,N):                                                                                                                                                                                                                             
+for i in range(0,N-5):                                                                                                                                #######################################                                                                                                                                                                                                                        
 	cost_pred_st = ca.mtimes(  ca.mtimes( (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) ).T , Q )  ,  (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) )  )  + ca.mtimes(  ca.mtimes( ( (U[0:n_controls,i]) - P[n_states*(N+1)+n_controls*(i):n_states*(N+1)+n_controls*(i) + n_controls].reshape((n_controls,1)) ).T , R )  ,  U[0:n_controls,i] - P[n_states*(N+1)+n_controls*(i):n_states*(N+1)+n_controls*(i) + n_controls].reshape((n_controls,1))  )  
 	obj = obj + cost_pred_st 
+	
+#for stopping at last point, we need higher cost (Q_2)                                                          #############################################
+for i in range(N-5,N): 
+    cost_pred_st = ca.mtimes(  ca.mtimes( (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) ).T , Q_2 )  ,  (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) )  )
+    obj = obj + cost_pred_st 
+
 
 for i in range(0,N+1):                                                                                                                                                                        
 	if i == 0:
@@ -610,6 +703,7 @@ path_last = np.array([ path[total_path_points-1][0], path[total_path_points-1][1
 P = X_init                                                                                       
 
 close_index = KDTree_func(path,x,y)#KDTree(path).query(P[0:n_states-1])[1]                                          
+close_index = 0                                                                                                                                                      ######################################
 
 for i in range(0,N):                                                                              
 	P = ca.vertcat(P,path[close_index+i,0:2])                                                          
@@ -787,9 +881,12 @@ while ( robot.step(timestep) != -1 ):
 					break			
 		
 		
-		if current_waypoint_index == KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:              ######
-			current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                #######     
-			waypoint = all_waypoints[current_waypoint_index]
+		# if current_waypoint_index == KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:              ######
+		# 	current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                #######     
+		# 	waypoint = all_waypoints[current_waypoint_index]
+		if FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1]) != current_waypoint_index:			#############
+			current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
+			waypoint = all_waypoints[current_waypoint_index]														#############
 		
 		print('Current Waypoint: ', waypoint)
 
@@ -855,6 +952,10 @@ while ( robot.step(timestep) != -1 ):
 			# else:
 			# 	d_reastar = 0.8    
 
+            
+
+
+
 			print(path)
 		else:
 			print("NO PATH")
@@ -883,7 +984,8 @@ while ( robot.step(timestep) != -1 ):
 					break
 
 			if len(all_waypoints) >1:                                                                                                              ####### 
-				current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]    #####
+				# current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]    #####
+				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1]) 			#############
 				waypoint = all_waypoints[current_waypoint_index]
 			else:
 			    waypoint = all_waypoints[-1]                                                                                                           ####	
@@ -903,12 +1005,13 @@ while ( robot.step(timestep) != -1 ):
 					break
 
 			if len(all_waypoints):
-				current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+				# current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			################
 				waypoint = all_waypoints[current_waypoint_index]
 
 
-	# cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
-	# cv2.waitKey(1)
+	#cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
+	#cv2.waitKey(1)
 
 
 	if(len(all_waypoints) == 0):
@@ -929,8 +1032,8 @@ while ( robot.step(timestep) != -1 ):
 		P[n_states*(N):n_states*(N+1)-1] = path[N+(close_index-1),0:2]                                             
 		P[n_states*(N+1)-1] = math.atan( (path[N+(close_index-1)][1] - path[N+(close_index-1)-1][1])/(path[N+(close_index-1)][0] - path[N+(close_index-1)-1][0] + 1e-9) )           ###########
 
-		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                              
-		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                     
+		#P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                              
+		#P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                     
 		"""
 		P[n_states:n_states*(N+1):3] = path[close_index:N+close_index,0]                    
 		P[n_states+1:n_states*(N+1):3] = path[close_index:N+close_index,1]                  
@@ -948,8 +1051,8 @@ while ( robot.step(timestep) != -1 ):
 		P[n_states*(N):n_states*(N+1)-1] = path[(total_path_points-1),0:2]                                                                                                                                                                                                                      
 		P[n_states*(N+1)-1] = math.atan( (path[total_path_points-1][1] - path[total_path_points-1-1][1])/(path[total_path_points-1][0] - path[total_path_points-1-1][0]+ 1e-9) )    
 		
-		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                                  
-		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                      
+		#P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                                  
+		#P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                      
 
 
 
@@ -968,7 +1071,6 @@ t_end = time.time()
 print( "Total Time taken = " , t_end - t_start)
 motor_left.setVelocity(0)             
 motor_right.setVelocity(0)            
-
 
 
 
