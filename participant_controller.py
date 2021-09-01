@@ -60,24 +60,6 @@ def KDTree_func(path,x,y):
 	return minimum_index
 	
 
-def ManhattanDistance(x1, y1, x2, y2): 																			#################
-	return abs(x1 - x2) + abs(y1 - y2)																			#################
-
-
-def FindNearestPoint(points_list, query):																		#################
-	min_distance = 10**10																
-	min_distance_index = -1
-	for i in range(len(points_list)):
-		distance = ManhattanDistance(points_list[i][0], points_list[i][1], query[0], query[1])
-		distance = int( (distance / 10) + 0.5)
-		print('i: ', i, ', Distance: ', distance)
-
-		if distance < min_distance:
-			min_distance = distance
-			min_distance_index = i
-
-	return min_distance_index
-
 
 #####################################################                                                       
 grid = np.zeros(shape=(100, 100), dtype='uint8')				##########
@@ -138,7 +120,7 @@ def roundToTen(val):
 # 		if(i%10==0 or j%10==0):
 # 			grid[i][j]=0
 			
-#cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
+cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
 
 class Array2D:
 
@@ -388,20 +370,22 @@ n_pts_picked  = 10#10#15
 d_reastar = 0.1#0.8                                                                                                 
 wall_extra_width = 3                                            																
 a_star_correction_search_window = 0													
-waypoint_change_dist = 0.75078930665				#################											
+waypoint_change_dist = 0.6#0.75078930665				#################											
 U_ref = np.array([0.4,0], dtype ='f')#0.85								   
 error_allowed = 2e-1                                                                                                                                                                    
 
 Q_x = 10000000000000#100000                                                ############### changed tuning
 Q_y = 10000000000000#100000
-Q_theta =   5000000000#500000000#5#250                                                                                                                                              
+Q_theta = 5#250                                                                                                                                              
 Q_x_2 = 0                                                                               ###################
 Q_y_2 =  0                                                                              ##################
-Q_theta_2 = 5000000000                                                                                    #################
+Q_theta_2 = 5000000000#5000                                                                                    #################
 R1 = 0.00001    
 R2 = 4000000000*1.5#250       
 
-
+n_stopped = 0                                                                                                       # HARD CODED UTURN
+u_turn_flag = 0                                                                                                   # HARD CODED UTURN
+zero_V_flag = 0														 # HARD CODED UTURN
 
 error_allowed_in_g = 1e-100   
 
@@ -526,13 +510,11 @@ while (robot.step(timestep) != -1):
 					break
 
 			if len(all_waypoints) > 1 :                                                                                                                     ###########    
-				# current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                                     #########
-				# waypoint = all_waypoints[current_waypoint_index]
-				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
-				waypoint = all_waypoints[current_waypoint_index]														#############
+				current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                                     #########
+				waypoint = all_waypoints[current_waypoint_index]
 
 			else:                                                                                                                                               ##########
-			    waypoint = all_waypoints[0] 	                                                                                                                #########
+				waypoint = all_waypoints[0] 	                                                                                                                #########
 	
 	else:
 		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= 1e-1):
@@ -544,10 +526,8 @@ while (robot.step(timestep) != -1):
 					break
 
 			if len(all_waypoints):
-				# current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
-				# waypoint = all_waypoints[current_waypoint_index]
-				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
-				waypoint = all_waypoints[current_waypoint_index]														#############
+				current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
+				waypoint = all_waypoints[current_waypoint_index]
 
 	## check pstart in obstacle
 	if dst_3[int(x1)][int(y1)] == 1:#grid[int(x1)][int(y1)] == 1:									#
@@ -564,14 +544,10 @@ while (robot.step(timestep) != -1):
 	
 	# print(np.array([x1, y1]))
 	# print(KDTree((np.array(all_waypoints) + 5) * 10).query(np.array([x1, y1])))
-	# if KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:										
-	# 	current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]
-	# 	waypoint = all_waypoints[current_waypoint_index]
-	# 	print(waypoint)
-	if FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1]) != current_waypoint_index:			#############
-		current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
-		waypoint = all_waypoints[current_waypoint_index]														#############
-		print(waypoint)																							#############
+	if KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:                            ###############										
+		current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                             ##############
+		waypoint = all_waypoints[current_waypoint_index]
+		print(waypoint)
 
 
 	pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
@@ -634,7 +610,7 @@ X =ca.SX.sym('X', n_states, N+1)
 obj = 0
 g = []
 Q = ca.diagcat(Q_x, Q_y,Q_theta)    
-                                                                                                                                                                     
+																																									 
 Q_2 = ca.diagcat(Q_x_2, Q_y_2,Q_theta_2)                                                                                                            #####################################                                                                                                                                                                        
 
 R = ca.diagcat(R1, R2)                                                                                         
@@ -644,8 +620,8 @@ for i in range(0,N-5):                                                          
 	
 #for stopping at last point, we need higher cost (Q_2)                                                          #############################################
 for i in range(N-5,N): 
-    cost_pred_st = ca.mtimes(  ca.mtimes( (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) ).T , Q_2 )  ,  (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) )  )
-    obj = obj + cost_pred_st 
+	cost_pred_st = ca.mtimes(  ca.mtimes( (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) ).T , Q_2 )  ,  (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) )  )
+	obj = obj + cost_pred_st 
 
 
 for i in range(0,N+1):                                                                                                                                                                        
@@ -702,7 +678,7 @@ path_last = np.array([ path[total_path_points-1][0], path[total_path_points-1][1
 
 P = X_init                                                                                       
 
-close_index = KDTree_func(path,x,y)#KDTree(path).query(P[0:n_states-1])[1]                                          
+#close_index = KDTree_func(path,x,y)#KDTree(path).query(P[0:n_states-1])[1]                                                                                         #################################                               
 close_index = 0                                                                                                                                                      ######################################
 
 for i in range(0,N):                                                                              
@@ -881,12 +857,9 @@ while ( robot.step(timestep) != -1 ):
 					break			
 		
 		
-		# if current_waypoint_index == KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:              ######
-		# 	current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                #######     
-		# 	waypoint = all_waypoints[current_waypoint_index]
-		if FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1]) != current_waypoint_index:			#############
-			current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			#############
-			waypoint = all_waypoints[current_waypoint_index]														#############
+		if  KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:                                   ######
+			current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                #######     
+			waypoint = all_waypoints[current_waypoint_index]
 		
 		print('Current Waypoint: ', waypoint)
 
@@ -952,7 +925,7 @@ while ( robot.step(timestep) != -1 ):
 			# else:
 			# 	d_reastar = 0.8    
 
-            
+			
 
 
 
@@ -984,11 +957,10 @@ while ( robot.step(timestep) != -1 ):
 					break
 
 			if len(all_waypoints) >1:                                                                                                              ####### 
-				# current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]    #####
-				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1]) 			#############
+				current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]           #####
 				waypoint = all_waypoints[current_waypoint_index]
 			else:
-			    waypoint = all_waypoints[-1]                                                                                                           ####	
+				waypoint = all_waypoints[-1]                                                                                                           ####	
 	
 	else:
 		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= 0.25):
@@ -1005,13 +977,12 @@ while ( robot.step(timestep) != -1 ):
 					break
 
 			if len(all_waypoints):
-				# current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
-				current_waypoint_index = FindNearestPoint((np.array(all_waypoints[:-1]) + 5) * 10, [x1, y1])			################
+				current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]                                          ###########
 				waypoint = all_waypoints[current_waypoint_index]
 
 
-	#cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
-	#cv2.waitKey(1)
+	cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
+	cv2.waitKey(1)
 
 
 	if(len(all_waypoints) == 0):
@@ -1057,8 +1028,34 @@ while ( robot.step(timestep) != -1 ):
 
 
 	# print( "Odometry = " , P[0:n_states]
-	# print( V, "    ", omega )
+	print( V, "    ", omega )
 
+	#####################################  # HARD CODED UTURN
+	if zero_V_flag == 1:
+		motor_left.setVelocity(0)             
+		motor_right.setVelocity(0)            
+		zero_V_flag = 0
+
+	if V < 0.05 and omega < 0.001:
+		n_stopped += 1
+		print (n_stopped)
+
+	if V > 0.05 :
+		n_stopped = 0
+		u_turn_flag = 0
+	
+ 
+
+	if n_stopped > 50 and u_turn_flag == 0  :
+		print ("BACKING UP")
+		motor_left.setVelocity(-10)             
+		motor_right.setVelocity(-10) 
+
+		if omega > 0.005 and n_stopped > 121:
+			u_turn_flag = 1
+			n_stopped = 0 
+			zero_V_flag = 1
+	######################################
 
 	for i in range(0,N*n_bound_var):                          
 		initial_X[i] = X_U_sol[i+n_bound_var]                 
@@ -1071,6 +1068,7 @@ t_end = time.time()
 print( "Total Time taken = " , t_end - t_start)
 motor_left.setVelocity(0)             
 motor_right.setVelocity(0)            
+
 
 
 
