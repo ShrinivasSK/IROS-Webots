@@ -10,17 +10,20 @@ from controller import Robot
 robot = Robot()
 
 timestep = int(robot.getBasicTimeStep())
-ld = robot.getDevice('Hokuyo URG-04LX-UG01')                                
+ld = robot.getDevice('lidar_tilt')                                
 ld.enable(timestep)
 															
 ld.enablePointCloud()                                                       
 ld.getHorizontalResolution()  
 
 wall_extra_width = 3
-max_path_length = 20
+max_path_length = 25
 
 bot_angular_resolution = 5
 waypoint_change_threshold = 3.5#1.5#3.5#2.5
+
+arm_wait_counter = 125
+
 
 pi = math.pi
 t_start = time.time()
@@ -50,6 +53,10 @@ arm_4 = robot.getDevice('arm_4_joint')
 # arm_2.setPosition(135.0*3.14159/180.0)
 # arm_4.setPosition(-89.0*3.14159/180.0) # -15.0 or 45.0
 
+# arm_1.setPosition(1.375)
+# arm_2.setPosition(1.02)
+# arm_3.setPosition(-3.3)
+# arm_4.setPosition(2.29)#-3.46)
 arm_1.setPosition(1.57)
 arm_2.setPosition(1.02)
 arm_3.setPosition(-3.2  )#-189*3.14159/180)
@@ -64,7 +71,7 @@ while (robot.step(timestep) != -1):
 	motor_left.setVelocity(0.0)             
 	motor_right.setVelocity(0.0)
 
-	if counter_1 >= 250:
+	if counter_1 >= arm_wait_counter:
 		break
 
 robot.step(timestep)
@@ -112,7 +119,7 @@ def pid(target_theta):
 	
 
 	# print("Adjusting Yaw")
-	kp,ki,kd = 7.5, 0, 200#2, 0, 200#7.5, 0, 200#10,0,225										
+	kp,ki,kd = 7.5, 0, 400#7.5, 0, 200#2, 0, 200#7.5, 0, 200#10,0,225										
 	
 	
 
@@ -163,8 +170,9 @@ def pid(target_theta):
 		gps_ee_vals = gps_ee.getValues()
 		robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
 		# end{please do not change}
-		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
-		cv2.waitKey(1)
+# 		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+# 		cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
+# 		cv2.waitKey(1)
 
 		# print (theta_odom*180/pi)
 	motor_left.setVelocity(0)             
@@ -214,7 +222,8 @@ waypoint = daughter_waypoints[current_waypoint_index]
 print(all_waypoints)
 
 
-def KDTree_manual(list,x,y):														
+def KDTree_manual(list,x,y):
+	global dst_3														
 	minimum_dist = 1000
 	minimum_index = 0
 	for l in range(0,list.shape[0]):
@@ -224,7 +233,7 @@ def KDTree_manual(list,x,y):
 		y_ = int(list[l][1])
 
 		if(x_ >= 0 and x_ < 100 and y_ >= 0 and y_ < 100):
-			if grid[x_][y_]!=1:	
+			if dst_3[x_][y_]!=1:	
 				if ((x-list[l][0])**2 + (y-list[l][1])**2) < minimum_dist:
 						minimum_dist = ((x-list[l][0])**2 + (y-list[l][1])**2)
 						minimum_index = l
@@ -235,25 +244,77 @@ def KDTree_manual(list,x,y):
 Function to pop and rotate arm
 '''
 def pop_and_arm(index, x, y):
-	a=(index+1)%4
-	d=54
-	if a==0:
-		d=int((index+1)/4)
-		d=d-1
-		daughter_waypoints.pop(4*d)
-		daughter_waypoints.pop(4*d+1)
-		daughter_waypoints.pop(4*d+2)
-		daughter_waypoints.pop(4*d+3)
-	else:
-		if index>3:
-			d=int(((index+1)-(index+1)%4)/4)
-		else:
-			d=0
-		daughter_waypoints.pop(4*d)
-		daughter_waypoints.pop(4*d+1)
-		daughter_waypoints.pop(4*d+2)
-		daughter_waypoints.pop(4*d+3)
+	global daughter_waypoints
+	global all_waypoints
+	# a=(index+1)%4
+	# d=54
+	# if a==0:
+	# 	d=int((index+1)/4)
+	# 	d=d-1
+	# 	daughter_waypoints.pop(4*d)
+	# 	daughter_waypoints.pop(4*d+1)
+	# 	daughter_waypoints.pop(4*d+2)
+	# 	daughter_waypoints.pop(4*d+3)
+	# else:
+	# 	if index>3:
+	# 		d=int(((index+1)-(index+1)%4)/4)
+	# 	else:
+	# 		d=0
+	# 	daughter_waypoints.pop(4*d)
+	# 	daughter_waypoints.pop(4*d+1)
+	# 	daughter_waypoints.pop(4*d+2)
+	# 	daughter_waypoints.pop(4*d+3)
 
+	a = index % 4
+	d = int(index / 4)
+
+	print("PARENT WAYPOINT: ", all_waypoints[d])
+	print("DAUGHTER: ", daughter_waypoints[d])
+
+	global ld
+	lidar_values = ld.getRangeImageArray()
+
+	bot_theta =IU.getRollPitchYaw()[0] + pi/2                          
+	if bot_theta > pi :
+		bot_theta = bot_theta - 2*pi
+
+	bot_x = gps.getValues()[0]
+	bot_y = gps.getValues()[1] 
+	update_map(lidar_values, bot_x, bot_y, bot_theta)
+	
+	if(a == 0):
+		print("Calling PID for angle: ", 180)
+		pid(pi)
+	elif(a == 1):
+		print("Calling PID for angle: ", 0)
+		pid(0)
+	elif(a == 2):
+		print("Calling PID for angle: ", -90)
+		pid(-1 * pi/2)
+	else:
+		print("Calling PID for angle: ", 90)
+		pid(pi/2)
+	
+
+	print("LEN of daughter waypoints (in func) (before): ", len(daughter_waypoints))
+	print("Daughter waypoints (in func) (before): \n", daughter_waypoints)
+
+	print("POPING: ", daughter_waypoints[4*d], daughter_waypoints[4*d+1], daughter_waypoints[4*d+2], daughter_waypoints[4*d+3])
+
+	daughter_waypoints.pop(4*d)
+	daughter_waypoints.pop(4*d)
+	daughter_waypoints.pop(4*d)
+	daughter_waypoints.pop(4*d)
+
+	all_waypoints.pop(d)
+
+	print("LEN of daughter waypoints (in func): ", len(daughter_waypoints))
+	print("Daughter waypoints (in func): \n", daughter_waypoints)
+
+
+
+
+	# Printing all values
 	# print(all_waypoints)	
 	# print("WAYPOINT INDEX IN ORIGINAL LIST")
 	# print(daughter_waypoints)
@@ -261,26 +322,32 @@ def pop_and_arm(index, x, y):
 	# print(d)
 	# print("WAYPOINT_______________________")
 
-	target_waypoint = all_waypoints[d]
-	x_target = (target_waypoint[0] + 5)*10
-	y_target = (target_waypoint[1] + 5)*10
+	# Main code###########################
+	# target_waypoint = all_waypoints[d]
+	# x_target = (target_waypoint[0] + 5)*10
+	# y_target = (target_waypoint[1] + 5)*10
 
-	arm_angle = np.arctan2(y_target - y1, x_target - x1)
-	pid(arm_angle)
+	# arm_angle = np.arctan2(y_target - y1, x_target - x1)
+	# pid(arm_angle)
 
-	all_waypoints.pop(d)
+	# all_waypoints.pop(d)
+	##################################
 	# print(all_waypoints)
 	# print(daughter_waypoints)
 	# print("WAYPOINT DAUGHTERS AFTER POP_____________")
 	
 
 	robot.step(timestep)	
+	# arm_1.setPosition(1.375)
+	# arm_2.setPosition(0)
+	# arm_3.setPosition(0)
+	# arm_4.setPosition(0)#-3.46)
 	arm_1.setPosition(1.57)
 	arm_2.setPosition(0)
 	arm_3.setPosition(-3.2)
 	arm_4.setPosition(0.6)
 	robot.step(timestep)
-		
+		# break
 
 	counter_1 = 0
 	while (robot.step(timestep) != -1):     
@@ -291,13 +358,20 @@ def pop_and_arm(index, x, y):
 		motor_left.setVelocity(0.0)             
 		motor_right.setVelocity(0.0)
 
-		if counter_1 >= 500:
+		if counter_1 >= arm_wait_counter:
 			break
+
+
+	# begin{please do not change}
+	gps_ee_vals = gps_ee.getValues()
+	robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
+	# end{please do not change}
 	
-	robot.step(timestep)
-	motor_left.setVelocity(0)             
-	motor_right.setVelocity(0)
-	robot.step(timestep)
+
+	# robot.step(timestep)
+	# motor_left.setVelocity(0)             
+	# motor_right.setVelocity(0)
+	# robot.step(timestep)
 		# break	
 
 	# timestep = int(robot.getBasicTimeStep())
@@ -322,10 +396,12 @@ def pop_and_arm(index, x, y):
 	# timestep = int(robot.getBasicTimeStep())
 	
 	# while(robot.step(timestep)!=-1):
+	# arm_1.setPosition(1.375)
 	arm_1.setPosition(1.57)
 	arm_2.setPosition(1.02)
-	arm_3.setPosition(-3.2)
-	arm_4.setPosition(2.29)
+	arm_3.setPosition(-3.2)#-189*3.14159/180)
+	arm_4.setPosition(2.29)#0.0*3.14159/180.0)#-3.46)
+
 	counter_1 = 0
 	while (robot.step(timestep) != -1):     
 		counter_1 += 1
@@ -335,13 +411,13 @@ def pop_and_arm(index, x, y):
 		motor_left.setVelocity(0.0)             
 		motor_right.setVelocity(0.0)
 
-		if counter_1 >= 500:
+		if counter_1 >= arm_wait_counter:
 			break
 	
-	robot.step(timestep)
-	motor_left.setVelocity(0)             
-	motor_right.setVelocity(0)
-	robot.step(timestep)
+	# robot.step(timestep)
+	# motor_left.setVelocity(0)             
+	# motor_right.setVelocity(0)
+	# robot.step(timestep)
 
 		# break
 	# arm_1.setPosition(1.375)
@@ -369,6 +445,7 @@ def check_reached_waypoint(x1, y1):
 	global current_waypoint_index
 	global waypoint
 
+	# Poping waypoint
 	if(len(daughter_waypoints) > 1):
 		for i in range(len(daughter_waypoints) - 4):
 			if(math.sqrt(((daughter_waypoints[i][0] + 5) * 10 - x1)**2 + ((daughter_waypoints[i][1] + 5) * 10 - y1)**2) <= waypoint_change_threshold):
@@ -384,10 +461,13 @@ def check_reached_waypoint(x1, y1):
 				pop_and_arm(i, x1, y1)
 				return -1
 
+	# Finding new waypoint
 	if(len(daughter_waypoints) > 1):
 		# new_waypoint_index = KDTree(((np.array(daughter_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]           #####
 		new_waypoint_index = KDTree_manual((np.array(daughter_waypoints[:-4]) + 5) * 10, x1, y1)
 		waypoint = daughter_waypoints[new_waypoint_index]
+
+		print("NEW WAYPOINT: ", waypoint)
 
 		if(new_waypoint_index != current_waypoint_index):
 			current_waypoint_index = new_waypoint_index
@@ -451,8 +531,8 @@ def roundToTen(val):
 	return val
 
 
-cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
-cv2.namedWindow("w2",cv2.WINDOW_NORMAL)
+# cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
+# cv2.namedWindow("w2",cv2.WINDOW_NORMAL)
 
 
 '''
@@ -647,10 +727,10 @@ class AStar:
 		flag_ = 0 # 0: x left, 1: x right, 2: y top, 3: y bottom
 
 
-		# print('PATH:')
-		# for p in path:
-		#     print(p.x,p.y)
-		# print('###########################')
+		print('PATH:')
+		for p in path:
+		    print(p.x,p.y)
+		print('###########################')
 
 		if(len(path) < 2):
 			return self.startPoint
@@ -1045,7 +1125,7 @@ def mpc(target_x,target_y):
 		else:
 			counter_ = 0
 
-		if counter_ >= 500:
+		if counter_ >= 250:
 			break
 
 		prev_error = current_error        
@@ -1114,8 +1194,9 @@ def mpc(target_x,target_y):
 		robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
 		# end{please do not change}
 		
-		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
-		cv2.waitKey(1)
+# 		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+# 		cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
+# 		cv2.waitKey(1)
 
 	motor_left.setVelocity(0)             
 	motor_right.setVelocity(0)     
@@ -1218,7 +1299,7 @@ while ( robot.step(timestep) != -1 ):
 	aStar = AStar(map2d, pStart, pEnd)
 	aStar.expansion(offset=0)
 	end_point = aStar.start()
-	# print("END Point: ", end_point.y, end_point.x, "Bot current point: ", x1, y1)
+	print("END Point: ", end_point.y, end_point.x, "Bot current point: ", x1, y1)
 	end_point.x, end_point.y = end_point.y, end_point.x 	
 
 	# pid(bot_theta + 5 * pi / 180)
@@ -1230,6 +1311,9 @@ while ( robot.step(timestep) != -1 ):
 
 
 	print("CURRENT WAYPOINT: ", (np.array(waypoint)+5)*10)
+	print("DAUGHTERS LIST: ")
+	print((np.array(daughter_waypoints)+5)*10)
+	print("CURRENT POSITION: ", x1, y1)
 
 
 	'''
@@ -1278,9 +1362,9 @@ while ( robot.step(timestep) != -1 ):
 		pass
 	else:
 		if (call_pid_ == 1):
-			if (req_angle == 180):
-				if (bot_angle_ < 0):
-					req_angle = -179.99
+			# if (req_angle == 180):
+			# 	if (bot_angle_ < 0):
+			# 		req_angle = -179.99
 			print('Calling PID for angle: ', req_angle)
 			pid(req_angle * pi / 180)
 			continue
@@ -1312,7 +1396,8 @@ while ( robot.step(timestep) != -1 ):
 		mpc(end_point.x, end_point.y)
 		
   
-	cv2.imwrite("map.jpg", (dst_4*255).astype(np.uint8))
-	cv2.imshow('w1', (dst_4*255).astype(np.uint8))
-	cv2.waitKey(1)
+# 	cv2.imwrite("map.jpg", (dst_4*255).astype(np.uint8))
+# 	cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+# 	cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
+# 	cv2.waitKey(1)
 		
