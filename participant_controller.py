@@ -9,6 +9,9 @@ import sys
 from controller import Robot
 robot = Robot()
 
+MAXIMUM_TIME = 3*60*1000
+SPENT_TIME = 0
+
 timestep = int(robot.getBasicTimeStep())
 ld = robot.getDevice('lidar_tilt')                                
 ld.enable(timestep)
@@ -113,6 +116,8 @@ for i in range(0,100):
 
 def pid(target_theta):
 
+	global SPENT_TIME
+
 	robot_dia = 0.5
 	wheel_rad = 0.15
 	omega_wheel_max = 10.15#5.15#10.15  ####################################
@@ -132,8 +137,8 @@ def pid(target_theta):
 			theta_odom = theta_odom - 2*pi
 		break	
 
-	if abs((target_theta*180/pi)-(theta_odom*180/pi)) > 135:					
-		kd = 325 								
+	# if abs((target_theta*180/pi)-(theta_odom*180/pi)) > 135:					
+	# 	kd = 325 								
 
 
 
@@ -142,6 +147,8 @@ def pid(target_theta):
 
 	while ( abs(e) > 5e-3 and robot.step(timestep) != -1):  ####################################
 		
+		SPENT_TIME += timestep
+
 		theta_odom =IU.getRollPitchYaw()[0]  + pi/2  
 		if theta_odom > pi:
 			theta_odom = theta_odom - 2*pi
@@ -170,15 +177,21 @@ def pid(target_theta):
 		gps_ee_vals = gps_ee.getValues()
 		robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
 		# end{please do not change}
-# 		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
-# 		cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
-# 		cv2.waitKey(1)
+		# cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+		# cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
+		# cv2.waitKey(1)
 
 		# print (theta_odom*180/pi)
 	motor_left.setVelocity(0)             
 	motor_right.setVelocity(0)	
 	# print (theta_odom*180/pi)			
 
+
+# def check_for_close_waypoints(x1, y1):
+	
+	
+
+# 	pass
 
 
 '''
@@ -1003,7 +1016,10 @@ def generate_path(start_x, start_y, end_x, end_y):
 	pass
 
 
-def mpc(target_x,target_y):																			
+def mpc(target_x,target_y):	
+	
+	global SPENT_TIME
+
 	print (target_x,target_y)
 	n_states = 3
 	n_controls = 2
@@ -1117,6 +1133,8 @@ def mpc(target_x,target_y):
 
 	while ( ca.norm_2( P[0:n_states-1].reshape((n_states-1)) - X_target[0:n_states-1] ) > error_allowed and robot.step(timestep) != -1 ) :       
 		
+		SPENT_TIME += timestep
+
 		current_error = ca.norm_2( P[0:n_states-1].reshape((n_states-1)) - X_target[0:n_states-1] )
 		# print(current_error)
 
@@ -1194,9 +1212,9 @@ def mpc(target_x,target_y):
 		robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
 		# end{please do not change}
 		
-# 		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
-# 		cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
-# 		cv2.waitKey(1)
+		# cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+		# cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
+		# cv2.waitKey(1)
 
 	motor_left.setVelocity(0)             
 	motor_right.setVelocity(0)     
@@ -1225,7 +1243,7 @@ def mpc(target_x,target_y):
 '''
 Main Loop
 '''
-while ( robot.step(timestep) != -1 ):
+while ( robot.step(timestep) != -1 ) and SPENT_TIME < MAXIMUM_TIME:
 
 
 	# print('YOOOOOOOOOO___-1')
@@ -1396,8 +1414,10 @@ while ( robot.step(timestep) != -1 ):
 		mpc(end_point.x, end_point.y)
 		
   
-# 	cv2.imwrite("map.jpg", (dst_4*255).astype(np.uint8))
-# 	cv2.imshow('w1', (dst_4*255).astype(np.uint8))
-# 	cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
-# 	cv2.waitKey(1)
+	# cv2.imwrite("map.jpg", (dst_4*255).astype(np.uint8))
+	# cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+	# cv2.imshow('w2', (grid_unprocessed*255).astype(np.uint8))
+	# cv2.waitKey(1)
+
+	SPENT_TIME += timestep
 		
