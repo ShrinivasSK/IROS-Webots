@@ -10,7 +10,7 @@ from controller import Robot
 robot = Robot()
 
 timestep = int(robot.getBasicTimeStep())
-ld = robot.getDevice('Hokuyo URG-04LX-UG01')                                
+ld = robot.getDevice('lidar_half_tilt')                                
 ld.enable(timestep)
 															
 ld.enablePointCloud()                                                       
@@ -50,10 +50,10 @@ arm_4 = robot.getDevice('arm_4_joint')
 # arm_2.setPosition(135.0*3.14159/180.0)
 # arm_4.setPosition(-89.0*3.14159/180.0) # -15.0 or 45.0
 
-arm_1.setPosition(1.57)
+arm_1.setPosition(1.375)
 arm_2.setPosition(1.02)
-arm_3.setPosition(-3.2  )#-189*3.14159/180)
-arm_4.setPosition(2.29)#0.0*3.14159/180.0)#-3.46)
+arm_3.setPosition(-3.3)
+arm_4.setPosition(2.29)#-3.46)
 
 counter_1 = 0
 while (robot.step(timestep) != -1):     
@@ -275,12 +275,12 @@ def pop_and_arm(index, x, y):
 	
 
 	robot.step(timestep)	
-	arm_1.setPosition(1.57)
+	# arm_1.setPosition(1.375)
 	arm_2.setPosition(0)
-	arm_3.setPosition(-3.2)
-	arm_4.setPosition(0.6)
+	arm_3.setPosition(0)
+	arm_4.setPosition(0)#-3.46)
 	robot.step(timestep)
-		
+		# break
 
 	counter_1 = 0
 	while (robot.step(timestep) != -1):     
@@ -322,10 +322,11 @@ def pop_and_arm(index, x, y):
 	# timestep = int(robot.getBasicTimeStep())
 	
 	# while(robot.step(timestep)!=-1):
-	arm_1.setPosition(1.57)
+	# arm_1.setPosition(1.375)
 	arm_2.setPosition(1.02)
-	arm_3.setPosition(-3.2)
+	arm_3.setPosition(-3.29)
 	arm_4.setPosition(2.29)
+
 	counter_1 = 0
 	while (robot.step(timestep) != -1):     
 		counter_1 += 1
@@ -1092,13 +1093,13 @@ def mpc(target_x,target_y):
 			theta = theta - 2*pi
 
 		#########################################
-		# global ld
-		# lidar_values = ld.getRangeImageArray()
+		global ld
+		lidar_values = ld.getRangeImageArray()
 
-		# bot_x = x
-		# bot_y = y
-		# bot_theta = theta
-		# update_map(lidar_values, bot_x, bot_y, bot_theta)
+		bot_x = x
+		bot_y = y
+		bot_theta = theta
+		update_map(lidar_values, bot_x, bot_y, bot_theta)
 		#########################################
 
 		P[0:n_states] =([x,y,theta])               
@@ -1230,6 +1231,8 @@ while ( robot.step(timestep) != -1 ):
 
 
 	print("CURRENT WAYPOINT: ", (np.array(waypoint)+5)*10)
+	print("DAUGHTERS LIST: ", (np.array(daughter_waypoints)+5)*10)
+	print("CURRENT POSITION: ", x1, y1)
 
 
 	'''
