@@ -1,52 +1,420 @@
 import casadi as ca
-import numpy as np									
+# from numpy import *
+import numpy as np
 import time
 import math 
 from scipy.spatial import KDTree                          							                                                           
 import cv2                                                              
 import sys
 from controller import Robot
-robot = Robot()                                                              
+robot = Robot()
+
+timestep = int(robot.getBasicTimeStep())
+ld = robot.getDevice('Hokuyo URG-04LX-UG01')                                
+ld.enable(timestep)
+															
+ld.enablePointCloud()                                                       
+ld.getHorizontalResolution()  
+
+wall_extra_width = 3
+max_path_length = 20
+
+bot_angular_resolution = 5
+waypoint_change_threshold = 3.5#1.5#3.5#2.5
 
 pi = math.pi
 t_start = time.time()
 inf = np.inf
-print( "***************************************************")
-# waypoint = np.array([3.5,-4.5], dtype ='f')
+# from controller import Robot
+# robot = Robot()
+# timestep = int(robot.getBasicTimeStep())
+motor_left = robot.getDevice('wheel_left_joint')
+motor_right = robot.getDevice('wheel_right_joint')
+motor_left.setPosition(inf)    
+motor_right.setPosition(inf)   
+motor_left.setVelocity(0)                              
+motor_right.setVelocity(0)                               
+gps = robot.getDevice('gps')
+gps.enable(timestep)
+gps_ee = robot.getDevice('gps_ee')
+gps_ee.enable(timestep)
+IU = robot.getDevice('inertial unit')
+IU.enable(timestep)
 
-# all_waypoints = [#np.array([-4.5,-4.5], dtype ='f'),
-# 				 np.array([-3.5,-3.5], dtype ='f'),
-# 				 #np.array([-2.5,-2.5], dtype ='f'),
-# 				 np.array([-1.5,-1.5], dtype ='f'),
-# 				 #np.array([-0.5,-0.5], dtype ='f'),
-# 				 np.array([0.5,0.5], dtype ='f'),
-# 				 #np.array([1.5,1.5], dtype ='f'),
-# 				 np.array([3.5,3.5], dtype ='f'),
-# 				 np.array([4.5,4.5], dtype ='f'),
-# 				]
+arm_1 = robot.getDevice('arm_1_joint')
+arm_2 = robot.getDevice('arm_2_joint')
+arm_3 = robot.getDevice('arm_3_joint')
+arm_4 = robot.getDevice('arm_4_joint')
 
+# arm_1.setPosition(90.0*3.14159/180.0)
+# arm_2.setPosition(135.0*3.14159/180.0)
+# arm_4.setPosition(-89.0*3.14159/180.0) # -15.0 or 45.0
+
+arm_1.setPosition(1.57)
+arm_2.setPosition(1.02)
+arm_3.setPosition(-3.2  )#-189*3.14159/180)
+arm_4.setPosition(2.29)#0.0*3.14159/180.0)#-3.46)
+
+counter_1 = 0
+while (robot.step(timestep) != -1):     
+	counter_1 += 1
+	theta_odom =IU.getRollPitchYaw()[0]  + pi/2  
+	if theta_odom > pi:
+		theta_odom = theta_odom - 2*pi
+	motor_left.setVelocity(0.0)             
+	motor_right.setVelocity(0.0)
+
+	if counter_1 >= 250:
+		break
+
+robot.step(timestep)
+motor_left.setVelocity(0)             
+motor_right.setVelocity(0)
+robot.step(timestep)
+
+
+# time.sleep(2)
+
+# time.sleep(2)
+# counter_ = 0
+# while(1):
+# 	counter_ += 1
+
+# 	if counter_ >= 5000:
+# 		break
+
+
+
+''' ###############################
+Mapping grids
+'''
+grid = np.zeros(shape=(100, 100), dtype='uint8')				##########
+gridlines = np.zeros(shape=(100, 100), dtype='uint8')				#########
+dst_4 = np.zeros(shape=(100, 100))
+grid_unprocessed = np.zeros(shape=(100, 100), dtype='uint8')
+
+grid_2 = grid.copy()
+dst_3 = grid.copy()
+
+
+for i in range(0,100):
+	for j in range(0,100):
+		if(i%10==0 or j%10==0):
+			gridlines[i][j]=1
+
+
+
+def pid(target_theta):
+
+	robot_dia = 0.5
+	wheel_rad = 0.15
+	omega_wheel_max = 10.15#5.15#10.15  ####################################
+	
+
+	# print("Adjusting Yaw")
+	kp,ki,kd = 7.5, 0, 200#2, 0, 200#7.5, 0, 200#10,0,225										
+	
+	
+
+
+	e_prev,sum_e = 0,0
+	while (robot.step(timestep) != -1):     
+	
+		theta_odom =IU.getRollPitchYaw()[0]  + pi/2  
+		if theta_odom > pi:
+			theta_odom = theta_odom - 2*pi
+		break	
+
+	if abs((target_theta*180/pi)-(theta_odom*180/pi)) > 135:					
+		kd = 325 								
+
+
+
+
+	e = target_theta - theta_odom
+
+	while ( abs(e) > 5e-3 and robot.step(timestep) != -1):  ####################################
+		
+		theta_odom =IU.getRollPitchYaw()[0]  + pi/2  
+		if theta_odom > pi:
+			theta_odom = theta_odom - 2*pi
+		
+		e = target_theta - theta_odom
+		sum_e = sum_e + e
+		OMEGA = kp*e + ki*sum_e + kd*(e - e_prev)
+		VELOCITY = 0
+		e_prev= e
+
+
+	
+		OMEGA_LEFT_WHEEL = (VELOCITY -OMEGA*robot_dia)/wheel_rad                         
+		OMEGA_RIGHT_WHEEL = (VELOCITY +OMEGA*robot_dia)/wheel_rad
+
+		OMEGA_LEFT_WHEEL = min(OMEGA_LEFT_WHEEL, omega_wheel_max)               
+		OMEGA_LEFT_WHEEL = max(OMEGA_LEFT_WHEEL, -1 * omega_wheel_max)          
+		OMEGA_RIGHT_WHEEL = min(OMEGA_RIGHT_WHEEL, omega_wheel_max)             
+		OMEGA_RIGHT_WHEEL = max(OMEGA_RIGHT_WHEEL, -1 * omega_wheel_max)        
+
+		motor_left.setVelocity(OMEGA_LEFT_WHEEL)             
+		motor_right.setVelocity(OMEGA_RIGHT_WHEEL)
+		
+
+		# begin{please do not change}
+		gps_ee_vals = gps_ee.getValues()
+		robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
+		# end{please do not change}
+		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+		cv2.waitKey(1)
+
+		# print (theta_odom*180/pi)
+	motor_left.setVelocity(0)             
+	motor_right.setVelocity(0)	
+	# print (theta_odom*180/pi)			
+
+
+
+'''
+Waypoints
+'''
+# Obtain waypoints
 all_waypoints = []
-waypoints_string = robot.getCustomData().split()
+waypoints_string = robot.getCustomData()
+waypoints_split = waypoints_string.split()
 for i in range(10):
-	waypoints_element = [float(waypoints_string[2*i]), float(waypoints_string[2*i+1])]
-	all_waypoints.append(np.array(waypoints_element, dtype='f'))
-print('Waypoints:', all_waypoints)
+	waypoints_element = [float(waypoints_split[2*i]), float(waypoints_split[2*i+1])]
+	all_waypoints.append(waypoints_element)
+# print('Waypoints:', waypoints)
 
-# all_waypoints = [#np.array([-4.5,-4.5], dtype ='f'),
-# 				 np.array([2.5,-4.5], dtype ='f'),
-# 				#  np.array([-3.5,-4.5], dtype ='f'),
-# 				#  np.array([3.5,3.5], dtype ='f'),
-# 				#  np.array([-1.5,-1.5], dtype ='f'),
-# 				#  np.array([-0.5,-0.5], dtype ='f'),
-# 				#  np.array([0.5,0.5], dtype ='f'),
-# 				#  np.array([4.5,4.5], dtype ='f'),
-# 				#  np.array([-3.5,-3.5], dtype ='f'),
-# 				#  np.array([1.5,1.5], dtype ='f'),
-# 				#  np.array([2.5,2.5], dtype ='f')
-				# ]
+# begin{please do not change}
+if (len(waypoints_split) != 20):
+	waypoints_string = ' '.join(waypoints_split[:20])
+# end{please do not change}
+
+
+# all_waypoints = []
+# waypoints_string = robot.getCustomData().split()
+# for i in range(10):
+#     waypoints_element = [float(waypoints_string[2*i]), float(waypoints_string[2*i+1])]
+#     all_waypoints.append(np.array(waypoints_element, dtype='f'))
+# print('Waypoints:', all_waypoints)
+
+
+'''
+Daughter Waypoints
+'''
+daughter_waypoints = []
+for i in range(0,len(all_waypoints)):
+	daughter_waypoints.append([all_waypoints[i][0]+1,all_waypoints[i][1]])
+	daughter_waypoints.append([all_waypoints[i][0]-1,all_waypoints[i][1]])
+	daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]+1])
+	daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]-1])
 
 current_waypoint_index = 0
-waypoint = all_waypoints[current_waypoint_index]
+waypoint = daughter_waypoints[current_waypoint_index]
+print(all_waypoints)
+
+
+def KDTree_manual(list,x,y):														
+	minimum_dist = 1000
+	minimum_index = 0
+	for l in range(0,list.shape[0]):
+		# print("CURRENT POINT: ", list[l][0], list[l][1])
+
+		x_ = int(list[l][0])
+		y_ = int(list[l][1])
+
+		if(x_ >= 0 and x_ < 100 and y_ >= 0 and y_ < 100):
+			if grid[x_][y_]!=1:	
+				if ((x-list[l][0])**2 + (y-list[l][1])**2) < minimum_dist:
+						minimum_dist = ((x-list[l][0])**2 + (y-list[l][1])**2)
+						minimum_index = l
+	return minimum_index
+
+
+'''
+Function to pop and rotate arm
+'''
+def pop_and_arm(index, x, y):
+	a=(index+1)%4
+	d=54
+	if a==0:
+		d=int((index+1)/4)
+		d=d-1
+		daughter_waypoints.pop(4*d)
+		daughter_waypoints.pop(4*d+1)
+		daughter_waypoints.pop(4*d+2)
+		daughter_waypoints.pop(4*d+3)
+	else:
+		if index>3:
+			d=int(((index+1)-(index+1)%4)/4)
+		else:
+			d=0
+		daughter_waypoints.pop(4*d)
+		daughter_waypoints.pop(4*d+1)
+		daughter_waypoints.pop(4*d+2)
+		daughter_waypoints.pop(4*d+3)
+
+	# print(all_waypoints)	
+	# print("WAYPOINT INDEX IN ORIGINAL LIST")
+	# print(daughter_waypoints)
+	# print("WAYPOINT DAUGHTERS")
+	# print(d)
+	# print("WAYPOINT_______________________")
+
+	target_waypoint = all_waypoints[d]
+	x_target = (target_waypoint[0] + 5)*10
+	y_target = (target_waypoint[1] + 5)*10
+
+	arm_angle = np.arctan2(y_target - y1, x_target - x1)
+	pid(arm_angle)
+
+	all_waypoints.pop(d)
+	# print(all_waypoints)
+	# print(daughter_waypoints)
+	# print("WAYPOINT DAUGHTERS AFTER POP_____________")
+	
+
+	robot.step(timestep)	
+	arm_1.setPosition(1.57)
+	arm_2.setPosition(0)
+	arm_3.setPosition(-3.2)
+	arm_4.setPosition(0.6)
+	robot.step(timestep)
+		
+
+	counter_1 = 0
+	while (robot.step(timestep) != -1):     
+		counter_1 += 1
+		theta_odom =IU.getRollPitchYaw()[0]  + pi/2  
+		if theta_odom > pi:
+			theta_odom = theta_odom - 2*pi
+		motor_left.setVelocity(0.0)             
+		motor_right.setVelocity(0.0)
+
+		if counter_1 >= 500:
+			break
+	
+	robot.step(timestep)
+	motor_left.setVelocity(0)             
+	motor_right.setVelocity(0)
+	robot.step(timestep)
+		# break	
+
+	# timestep = int(robot.getBasicTimeStep())
+	# robot.step(timestep)
+	# while(robot.step(timestep) != -1):
+
+
+		# arm_1_pos = arm_1.getPosition()
+
+	# motor_left.setVelocity(0.1)             
+	# motor_right.setVelocity(0.1)
+
+	# counter_ = 0
+	# while(1):
+	# 	counter_ += 1
+
+	# 	if counter_ >= 100000000000:
+	# 		break
+
+	# while(robot.getBasicTimeStep() != -1):
+
+	# timestep = int(robot.getBasicTimeStep())
+	
+	# while(robot.step(timestep)!=-1):
+	arm_1.setPosition(1.57)
+	arm_2.setPosition(1.02)
+	arm_3.setPosition(-3.2)
+	arm_4.setPosition(2.29)
+	counter_1 = 0
+	while (robot.step(timestep) != -1):     
+		counter_1 += 1
+		theta_odom =IU.getRollPitchYaw()[0]  + pi/2  
+		if theta_odom > pi:
+			theta_odom = theta_odom - 2*pi
+		motor_left.setVelocity(0.0)             
+		motor_right.setVelocity(0.0)
+
+		if counter_1 >= 500:
+			break
+	
+	robot.step(timestep)
+	motor_left.setVelocity(0)             
+	motor_right.setVelocity(0)
+	robot.step(timestep)
+
+		# break
+	# arm_1.setPosition(1.375)
+	# arm_2.setPosition(1.02)
+	# arm_3.setPosition(-3.29)
+	# arm_4.setPosition(2.29)#-3.46)
+	
+	# timestep = int(robot.getBasicTimeStep())
+	# robot.step(timestep)
+
+	# motor_left.setVelocity(0.0)             
+	# motor_right.setVelocity(0.0)
+	# 	break
+	
+
+
+'''
+returns 2: waypoint_changed
+returns 1: waypoint_not_changed
+# returns 0: no_waypoint_available --> go to last waypoint
+returns -1: course complete
+'''
+def check_reached_waypoint(x1, y1):
+	global daughter_waypoints
+	global current_waypoint_index
+	global waypoint
+
+	if(len(daughter_waypoints) > 1):
+		for i in range(len(daughter_waypoints) - 4):
+			if(math.sqrt(((daughter_waypoints[i][0] + 5) * 10 - x1)**2 + ((daughter_waypoints[i][1] + 5) * 10 - y1)**2) <= waypoint_change_threshold):
+				# print("REACHED Waypoint: ", daughter_waypoints[i])
+				# daughter_waypoints.pop(i)
+				pop_and_arm(i, x1, y1)
+				break
+	else:
+		for i in range(len(daughter_waypoints)):
+			if(math.sqrt(((daughter_waypoints[i][0] + 5) * 10 - x1)**2 + ((daughter_waypoints[i][1] + 5) * 10 - y1)**2) <= waypoint_change_threshold):
+				# print("REACHED Waypoint: ", daughter_waypoints[i])
+				# daughter_waypoints.pop(i)
+				pop_and_arm(i, x1, y1)
+				return -1
+
+	if(len(daughter_waypoints) > 1):
+		# new_waypoint_index = KDTree(((np.array(daughter_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]           #####
+		new_waypoint_index = KDTree_manual((np.array(daughter_waypoints[:-4]) + 5) * 10, x1, y1)
+		waypoint = daughter_waypoints[new_waypoint_index]
+
+		if(new_waypoint_index != current_waypoint_index):
+			current_waypoint_index = new_waypoint_index
+			return 2
+		else:
+			return 1
+	else:
+		waypoint = daughter_waypoints[-1]
+		return 0
+
+
+
+# def change_waypoint(x1, y1):
+#     global all_waypoints
+#     global current_waypoint_index
+#     global waypoint
+
+
+#     all_waypoints.pop(current_waypoint_index)
+
+#     if(len(all_waypoints)):
+#         current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]           #####
+#         waypoint = all_waypoints[current_waypoint_index]
+#         return 1
+#     else:
+#         return 0
+
 
 def KDTree_func(path,x,y):
 	minimum_dist = 100
@@ -58,42 +426,9 @@ def KDTree_func(path,x,y):
 			minimum_index = l
 
 	return minimum_index
-	
 
 
-#####################################################                                                       
-grid = np.zeros(shape=(100, 100), dtype='uint8')				##########
-gridlines = np.zeros(shape=(100, 100), dtype='uint8')				#########
-dst_4 = np.zeros(shape=(100, 100))
 
-# cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
-
-"""								###########
-for i in range(100):
-	grid[i][0] = 1
-	grid[i][1] = 1
-	grid[i][2] = 1
-
-	grid[i][97] = 1
-	grid[i][98] = 1
-	grid[i][99] = 1
-
-	grid[0][i] = 1
-	grid[1][i] = 1
-	grid[2][i] = 1
-
-	grid[97][i] = 1
-	grid[98][i] = 1
-	grid[99][i] = 1
-"""
-grid_2 = grid.copy()
-
-# def getDistAndAngle(data):
-# 	loc = []
-# 	for idx in range(35,630):
-# 		loc.append([data[int(idx)],idx*240/667-30])
-# 	return loc
-global x_1,y_1	
 def getPointRel(angle_1,r):
 	theta_1 = angle_1*pi/180
 	x_1 = r*math.cos(theta_1)
@@ -114,14 +449,15 @@ def roundToTen(val):
 	else:
 		val+=10-rem
 	return val
-	
-# for i in range(0,100):
-# 	for j in range(0,100):
-# 		if(i%10==0 or j%10==0):
-# 			grid[i][j]=0
-			
-#cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
 
+
+cv2.namedWindow("w1",cv2.WINDOW_NORMAL)
+cv2.namedWindow("w2",cv2.WINDOW_NORMAL)
+
+
+'''
+Astar
+'''
 class Array2D:
 
 	def __init__(self, w, h, mapdata=[]):
@@ -249,6 +585,207 @@ class AStar:
 			for xy in barrierxy:
 				self.setNearOnce(xy[0], xy[1])
 
+	def correctPath(self,path):													################
+		i=0
+		while(i<len(path)-2):
+			prev = path[i]
+			cur=path[i+1]
+			next=path[i+2]
+			if(prev.x==cur.x and cur.x==next.x):
+				prev.x=prev.x-prev.x%10+5
+				path[i]=prev
+			elif(prev.y==cur.y and cur.y==next.y):
+				prev.y=prev.y-prev.y%10+5
+				path[i]=prev
+			else:
+			## L case
+				if(prev.x==cur.x):
+					## first horizontal 
+					## second vertical
+					prev.x=prev.x-prev.x%10+5
+					cur.x=cur.x-cur.x%10+5
+					cur.y = cur.y - cur.y%10+5
+				else:
+					## first vertical 
+					## second horizontal
+					prev.y=prev.y-prev.y%10+5
+					cur.x=cur.x-cur.x%10+5
+					cur.y = cur.y - cur.y%10+5
+				path[i]=prev
+				path[i+1]=cur
+				i+=1
+			i+=1
+		if i == len(path) - 2:
+			cur=path[i]
+			next=path[i+1]
+			if(cur.x==next.x):
+				cur.x=cur.x-cur.x%10+5
+				next.x = next.x-next.x%10+5
+			else:
+				cur.y=cur.y-cur.y%10+5
+				next.y = next.y-next.y%10+5
+			path[i]=cur
+			path[i+1]=next
+		else:
+			cur=path[i-1]
+			next=path[i]
+			if(cur.x==next.x):
+				cur.x=cur.x-cur.x%10+5
+				next.x = next.x-next.x%10+5
+			else:
+				cur.y=cur.y-cur.y%10+5
+				next.y = next.y-next.y%10+5
+			path[i-1]=cur
+			path[i]=next
+		return path
+
+	
+	'''
+		Return point just before turn
+	'''
+	def segment_path(self, path):
+		flag_ = 0 # 0: x left, 1: x right, 2: y top, 3: y bottom
+
+
+		# print('PATH:')
+		# for p in path:
+		#     print(p.x,p.y)
+		# print('###########################')
+
+		if(len(path) < 2):
+			return self.startPoint
+
+		p1 = path[0]
+		p2 = path[1]
+
+		if (p2.x - p1.x > 0):
+			flag_ = 1
+		elif (p2.x - p1.x < 0):
+			flag_ = 0
+		else:
+			if(p2.y - p1.y > 0):
+				flag_ = 3
+			else:
+				flag_ = 2
+		
+		temp_counter = 1
+
+
+		for i in range(2, len(path)):
+			temp_counter += 1
+			p1_ = path[i-1]
+			p2_ = path[i]
+
+			x_change = 0 # 0: no change, 1: left, 2: right
+			y_change = 0 # 0: no change, 1: top, 2: bottom
+  
+
+			if(p2_.x - p1_.x > 0):
+				x_change = 2
+			elif(p2_.x - p1_.x < 0):
+				x_change = 1
+			
+			if(p2_.y - p1_.y > 0):
+				y_change = 2
+			elif(p2_.y - p1_.y < 0):
+				y_change = 1
+			
+			#print(x_change, y_change, flag_)
+
+			if(x_change != 0 and y_change != 0):
+				end_point = Point(0, 0)
+			
+				if(flag_ == 0):
+					end_point.y = p1_.y
+					end_point.x = p1_.x - 1
+
+					if(y_change == 2):
+						flag_ = 3
+					else:
+						flag_ = 2
+
+				elif(flag_ == 1):
+					end_point.y = p1_.y
+					end_point.x = p1_.x + 1
+
+					if(y_change == 2):
+						flag_ = 3
+					else:
+						flag_ = 2
+
+				elif(flag_ == 2):
+					end_point.y = p1_.y - 1
+					end_point.x = p1_.x
+
+					if(x_change == 2):
+						flag_ = 1
+					else:
+						flag_ = 0
+				
+				else:
+					#print("P1: ", p1_.x, p1_.y, "FLAG: ", flag_)
+					end_point.y = p1_.y + 1
+					end_point.x = p1_.x
+
+					if(x_change == 2):
+						flag_ = 1
+					else:
+						flag_ = 0
+			
+				end_point.x = end_point.x - end_point.x%10 + 5
+				end_point.y = end_point.y - end_point.y%10 + 5
+				
+				if temp_counter==2:  ####################################
+					continue
+
+				return end_point
+			
+			elif(x_change != 0):
+				if (flag_ == 2 or flag_ == 3):
+
+					if(x_change == 2):
+						flag_ = 1
+					else:
+						flag_ = 0
+
+					if temp_counter==2:  ####################################
+						continue
+
+					return p1_
+				
+				if(p2_.x - path[0].x + p2_.y - path[0].y >= max_path_length):
+					return p2_
+			
+			elif(y_change != 0):
+				if (flag_ == 0 or flag_ == 1):
+
+					if(y_change == 2):
+						flag_ = 3
+					else:
+						flag_ = 2
+
+					if temp_counter==2:  ####################################
+						continue
+
+					return p1_
+				
+				if(p2_.x - path[0].x + p2_.y - path[0].y >= max_path_length):
+					return p2_
+
+			else:
+				
+				temp_counter -= 1
+
+				if(p2_.x - path[0].x + p2_.y - path[0].y >= max_path_length):
+					return p2_
+
+				continue
+
+
+		return path[-1]
+
+
+
 	def start(self):
 		startNode = AStar.Node(self.startPoint, self.endPoint)
 		self.openList.append(startNode)
@@ -284,100 +821,30 @@ class AStar:
 						# print((pathList)
 						# print((list(reversed(pathList)))
 						# print((pathList.reverse())
-						return list(reversed(pathList))
+						return self.segment_path(self.correctPath(list(reversed(pathList))))				############
 			if len(self.openList) == 0:
-				return None
+				return self.startPoint
 ###############################################
-   
-timestep = int(robot.getBasicTimeStep())
-motor_left = robot.getDevice('wheel_left_joint')
-motor_right = robot.getDevice('wheel_right_joint')
-motor_left.setPosition(inf)    
-motor_right.setPosition(inf)   
-motor_left.setVelocity(0)                              
-motor_right.setVelocity(0)                               
-gps = robot.getDevice('gps')
-gps.enable(timestep)
-IU = robot.getDevice('inertial unit')
-IU.enable(timestep)
-n_states = 3
-n_controls = 2
-
-ld = robot.getDevice('Hokuyo URG-04LX-UG01')                                
-ld.enable(timestep)
-															
-ld.enablePointCloud()                                                       
-ld.getHorizontalResolution()                                                
 
 
-N = 12         
-#delta_T = 0.2                                                                                          
-n_pts_picked  = 15                                                                                                
-d_reastar = 0.8                                                                                                 
-wall_extra_width = 4                                            																
-a_star_correction_search_window = 0													
-waypoint_change_dist = 0.1#0.75078930665				#################											
-U_ref = np.array([0.8,0], dtype ='f')#0.85								   
-error_allowed = 2e-1                                                                                                                                                                    
+'''
+Mapping
+'''
 
-Q_x = 100000 #1000000*120#100000                                                ############### changed tuning
-Q_y = 100000 #1000000*120
-Q_theta = 250#50000*10	#250                                                                                                                                              
-R1 = 0.00001    
-R2 = 250#400000#400000#250       
+def update_map(lidar_values, bot_x, bot_y, bot_theta):
 
+	global grid
+	global gridlines
+	global dst_4
+	global grid_unprocessed
+	global grid_2
+	global dst_3
 
-error_allowed_in_g = 1e-100   
+	global wall_extra_width
 
-n_bound_var = n_states                        
-x_bound_max = 4.725                                                                                                                                                                              
-x_bound_min = -4.725          
-y_bound_max = 4.725          
-y_bound_min = -4.725          
-theta_bound_max = inf              
-theta_bound_min = -inf             
-omega_wheel_max = 10.15
-robot_dia = 0.5
-wheel_rad = 0.15
-v_max =0.8#1#omega_wheel_max*wheel_rad                                 
-v_min = 0#0.0001#-v_max    
-omega_max = omega_wheel_max*wheel_rad/robot_dia                                                
-omega_min = -omega_max
-
-global x,y,theta,V,omega, theta_2
-
-path=np.zeros((n_pts_picked,2))                                               
-
-for i in range(0,100):										#
-	for j in range(0,100):	#									
-		if(i%10==0 or j%10==0):#
-			gridlines[i][j]=1#
-
-
-
-while (robot.step(timestep) != -1):     
-	x = gps.getValues()[0]
-	y = gps.getValues()[1]
-	theta =IU.getRollPitchYaw()[0]  + pi/2  ## Commented
-	if theta > pi:
-		theta = theta - 2*pi
-	theta_2 = theta
-	#theta =IU.getRollPitchYaw()[2]  ## Changed to 2
-	#theta_2=IU.getRollPitchYaw()[2]
-
-
-
-
-	
-	#############################################################
-	lidar_values = ld.getRangeImageArray()  
-		###### 
-	bot_x = x
-	bot_y = y
-	bot_theta = theta_2                                                       
+	# Adding lidar points to grid without correction
 	for idx in range(35,635, 3):							
 		if lidar_values[int(idx)][0] <= 3.0:
-			# print('HERE')
 			dist, angle = lidar_values[int(idx)], idx*240/666-30
 			dist = dist[0]
 			if(dist==np.inf):
@@ -387,360 +854,55 @@ while (robot.step(timestep) != -1):
 			x,y = transform(coordRel[0],coordRel[1],bot_theta,bot_x,bot_y)
 			x_int= int((x+5)*10+0.5)
 			y_int = int((y+5)*10+0.5)
-			# X.append(x_int)
-			# Y.append(y_int)
-			x_temp = x_int
+
+
+			x_temp=x_int
 			y_temp=y_int
 			if(x_int<100 and y_int<100 and x_int>=0 and y_int>=0):
 				grid[x_int][y_int]=1
-	dst = grid & gridlines      
+				grid_unprocessed[x_int][y_int]=1
+	
+	dst = grid & gridlines
 
-	dst_2 = np.copy(dst)
+	# Applying 3x3 filter
+	# output dst_2 
+	grid = np.copy(dst)
 	for i in range(1, 99):
 		for j in range(1, 99):
 			middle_sum = dst[i][j] + dst[i-1][j] + dst[i+1][j] + dst[i][j-1] + dst[i][j+1] #+ dst[i-2][j] + dst[i+2][j] + dst[i][j-2] + dst[i][j+2]
 			corner_sum = dst[i-1][j-1] + dst[i+1][j+1] + dst[i-1][j+1] + dst[i+1][j-1] #+ dst[i-2][j-2] + dst[i+2][j+2] + dst[i-2][j+2] + dst[i+2][j-2]
 			
 			if not(middle_sum >= 2 and corner_sum == 0):
-				dst_2[i][j] = 0
+				grid[i][j] = 0
 
-	grid = np.copy(dst_2)													
-	dst_3 = np.copy(dst_2)
+	# grid = np.copy(dst_2) 
+	dst_3 = np.copy(grid)
+	
 
+	# Extrapolation
 	for i in range(1, 99):
 		for j in range(1, 99):
-			if(dst_2[i][j] == 1):
+			if(grid[i][j] == 1):
 				for k in range(-1 * wall_extra_width, wall_extra_width + 1):
 					for l in range(-1 * wall_extra_width, wall_extra_width + 1):
 						if (i + k < 100 and i + k >= 0 and j + l < 100 and j + l >=0):
 							dst_3[i+k][j+l] = 1
-	
-	# dst = dst_2
 
+	# Adding Boundaries
 	for i in range(100):
-		for j in range(4):
+		for j in range(3):
 			dst_3[i][j] = 1
 			dst_3[i][100 - j - 1] = 1
 			dst_3[j][i] = 1
 			dst_3[100 - j - 1][i] = 1
 		
 		dst_3[4][i] = 1
-		#############
-
-	# cv2.imshow('w1',(dst_3*255).astype('uint8'))                  #
-	# cv2.waitKey(1)
-
-	size=dst_3.shape#grid.shape						#
-	map2d = Array2D(size[0], size[1])
-	for i in range(size[0]):
-		for j in range(size[1]):
-			map2d[i][j]=dst_3[j][i]#grid[j][i]			#
-	   
-		
-	
-	x1=(bot_x+5)*10 + 0.5
-	y1=(bot_y+5)*10 + 0.5
-
-	if len(all_waypoints) > 1:
-		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= waypoint_change_dist):
-			for i__ in range(len(all_waypoints)-1):                                                                                                         #####
-				if (np.sqrt(abs(bot_x - all_waypoints[i__][0]) ** 2 + abs(bot_y - all_waypoints[i__][1]) ** 2) <= waypoint_change_dist):
-					all_waypoints.pop(i__)
-					i__ -= 1
-					break
-
-			if len(all_waypoints) > 1 :                                                                                                                     ###########    
-				current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                                     #########
-				waypoint = all_waypoints[current_waypoint_index]
-
-			else:                                                                                                                                               ##########
-			    waypoint = all_waypoints[0] 	                                                                                                                #########
-	
-	else:
-		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= 1e-1):
-
-			for i__ in range(len(all_waypoints)):
-				if abs(pStart.x - int((all_waypoints[i__][1] + 5) * 10 + 0.5)) <= waypoint_change_dist and abs(pStart.y - int((all_waypoints[i__][0] + 5) * 10 + 0.5)) <= waypoint_change_dist:
-					all_waypoints.pop(i__)
-					i__ -= 1
-					break
-
-			if len(all_waypoints):
-				current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
-				waypoint = all_waypoints[current_waypoint_index]
-
-	## check pstart in obstacle
-	if dst_3[int(x1)][int(y1)] == 1:#grid[int(x1)][int(y1)] == 1:									#
-		for j in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
-			flag = 0
-			for k in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
-				if dst_3[int(x1) + j][int(y1) + k] == 0:#grid[int(x1) + j][int(y1) + k] == 0:					#
-					x1 = int(x1) + j
-					y1 = int(y1) + k
-					flag = 1
-					break
-			if flag:
-				break
-	
-	# print(np.array([x1, y1]))
-	# print(KDTree((np.array(all_waypoints) + 5) * 10).query(np.array([x1, y1])))
-	if KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:										
-		current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]
-		waypoint = all_waypoints[current_waypoint_index]
-		print(waypoint)
-
-
-	pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
-	aStar = AStar(map2d, pStart, pEnd)
-	aStar.expansion(offset=0)
-	pathList = aStar.start()
-	#path=np.zeros((30,2), dtype ='f')	
-	if pathList:
-		path[0][0] = int(x1)                                                    
-		path[0][1] = int(y1)                                                    
-		i=1#0                                                                  
-		for point in pathList:
-			if i==n_pts_picked:
-				break
-			path[i][0]= float(point.y)
-			path[i][1]= float(point.x)
-			dst_4[int(point.y)][int(point.x)] = 0.75
-			i=i+1
-		
-		if i<n_pts_picked:
-			for j in range(i,n_pts_picked):
-				path[j][0]=path[j-1][0]
-				path[j][1]=path[j-1][1]
-
-	path = np.divide(path,10)
-	path = np.subtract(path,5)
-	
-	# print( path)
-
-	############################################################
-	
-	break
-
-
-
-global total_path_points												#  """??"""      
-total_path_points = path.shape[0]                                                                      												
-#path = np.zeros((95,2))	                                                                            										
-
-
-
-path_resolution =  ca.norm_2(path[0,0:2] - path[1,0:2])         
-global delta_T                                                  
-delta_T = ( path_resolution / ((U_ref[0])) )/10                            
-
-x_casadi =ca.SX.sym('x')                
-y_casadi = ca.SX.sym('y')
-theta_casadi = ca.SX.sym('theta')
-states =np.array([(x_casadi),(y_casadi),(theta_casadi)]) 
-n_states = states.size           
-v_casadi =ca.SX.sym('v')
-omega_casadi = ca.SX.sym('omega')
-controls = np.array([v_casadi,omega_casadi])      
-n_controls = controls.size      
-rhs = np.array([v_casadi*ca.cos(theta_casadi),v_casadi*ca.sin(theta_casadi),omega_casadi]) 
-f = ca.Function('f',[states,controls],[rhs]) 
-U = ca.SX.sym('U', n_controls,N)
-P = ca.SX.sym('P',1, n_states + n_states*(N) + n_controls*(N))
-X =ca.SX.sym('X', n_states, N+1)
-obj = 0
-g = []
-Q = ca.diagcat(Q_x, Q_y,Q_theta)                                                                                                                                                                         
-R = ca.diagcat(R1, R2)                                                                                         
-for i in range(0,N):                                                                                                                                                                                                                             
-	cost_pred_st = ca.mtimes(  ca.mtimes( (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) ).T , Q )  ,  (X[0:n_states,i] - P[n_states*(i+1) :n_states*(i+1) + n_states ].reshape((n_states,1)) )  )  + ca.mtimes(  ca.mtimes( ( (U[0:n_controls,i]) - P[n_states*(N+1)+n_controls*(i):n_states*(N+1)+n_controls*(i) + n_controls].reshape((n_controls,1)) ).T , R )  ,  U[0:n_controls,i] - P[n_states*(N+1)+n_controls*(i):n_states*(N+1)+n_controls*(i) + n_controls].reshape((n_controls,1))  )  
-	obj = obj + cost_pred_st 
-
-for i in range(0,N+1):                                                                                                                                                                        
-	if i == 0:
-		g = ca.vertcat( g,( X[0:n_states,i] - P[0:n_states].reshape((n_states,1)) )  )                                                                                       
-	else:
-		K1 = f(X[0:n_states,i-1],U[0:n_controls,i-1])                                                                       
-		K2 = f(X[0:n_states,i-1] + np.multiply(K1,delta_T/2),U[0:n_controls,i-1])                                          
-		K3 = f(X[0:n_states,i-1] + np.multiply(K2,delta_T/2),U[0:n_controls,i-1])                                          
-		K4 = f(X[0:n_states,i-1] + np.multiply(K3,delta_T),U[0:n_controls,i-1])                                            
-		pred_st = X[0:n_states,i-1] + (delta_T/6)*(K1+2*K2+2*K3+K4)                                                          
-			 
-		g = ca.vertcat( g,(X[0:n_states,i] - pred_st[0:n_states].reshape((n_states,1)) )  )                                                                
-																					 
-OPT_variables = X.reshape((n_states*(N+1),1))          
-OPT_variables = ca.vertcat( OPT_variables, U.reshape((n_controls*N,1)) )          
-nlp_prob ={
-		   'f':obj,
-		   'x':OPT_variables,
-		   'g':g,
-		   'p':P
-		  }
-opts = {
-		 'ipopt':
-		{
-		  'max_iter': 100,
-		  'print_level': 0,
-		  'acceptable_tol': 1e-8,
-		  'acceptable_obj_change_tol': 1e-6
-		},
-		 'print_time': 0
-	   }
-solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
-lbg = ca.DM.zeros(((n_states)*(N+1),1))                                                                                                                           
-ubg = ca.DM.zeros(((n_states)*(N+1),1))                                                                                                                           
-lbg[0:(n_states)*(N+1)] = - error_allowed_in_g                                                                                                                    
-ubg[0:(n_states)*(N+1)] =  error_allowed_in_g                                                                                                                     
-lbx = ca.DM.zeros((n_states*(N+1) + n_controls*N,1)) 
-ubx = ca.DM.zeros((n_states*(N+1) + n_controls*N,1)) 
-lbx[0:n_bound_var*(N+1):3] = x_bound_min                       
-ubx[0:n_bound_var*(N+1):3] = x_bound_max                       
-lbx[1:n_bound_var*(N+1):3] = y_bound_min                       
-ubx[1:n_bound_var*(N+1):3] = y_bound_max                       
-lbx[2:n_bound_var*(N+1):3] = theta_bound_min                   
-ubx[2:n_bound_var*(N+1):3] = theta_bound_max                       
-lbx[n_bound_var*(N+1):(n_bound_var*(N+1)+n_controls*N):2] = v_min                        
-ubx[(n_bound_var*(N+1)):(n_bound_var*(N+1)+n_controls*N):2] = v_max                      
-lbx[(n_bound_var*(N+1)+1):(n_bound_var*(N+1)+n_controls*N):2] = omega_min                
-ubx[(n_bound_var*(N+1)+1):(n_bound_var*(N+1)+n_controls*N):2] = omega_max                
-
-X_init = np.array([x,y,theta], dtype = 'f')                                                                                                                                                                                    
-#X_target = np.array([ path[total_path_points-1][0], path[total_path_points-1][1], 0 ]  , dtype = 'f')                        #   """???"""  
-path_last = np.array([ path[total_path_points-1][0], path[total_path_points-1][1]]  , dtype = 'f')                        
-
-P = X_init                                                                                       
-
-close_index = KDTree_func(path,x,y)#KDTree(path).query(P[0:n_states-1])[1]                                          
-
-for i in range(0,N):                                                                              
-	P = ca.vertcat(P,path[close_index+i,0:2])                                                          
-	P = ca.vertcat(P, math.atan((path[close_index+i+1][1] - path[close_index+i][1])/(path[close_index+i+1][0] - path[close_index+i][0]+ 1e-9)) )        
-
-for i in range(0,N):                                                                              
-	P = ca.vertcat(P, U_ref[0])                                                                   
-	P = ca.vertcat(P, U_ref[1])                                                                  
-
-initial_X = ca.DM.zeros((n_states*(N+1)))
-initial_X[0:n_states*(N+1):3] = X_init[0]
-initial_X[1:n_states*(N+1):3] = X_init[1]
-initial_X[2:n_states*(N+1):3] = X_init[2]
-
-initial_con = ca.DM.zeros((n_controls*N,1)) 
-
-
-n_iter = 0
-"""???"""  
-pStart, pEnd = Point(0, 0), Point(0, 0)
-#while ( ca.norm_2( P[0:n_states-1].reshape((n_states-1,1)) - X_target[0:n_states-1] ) > error_allowed and robot.step(timestep) != -1 ):    				                                       
-counter = 0                                                                                                                                                            
-while ( robot.step(timestep) != -1 ): 
-	n_iter += 1 
-	args = {
-			'lbx':lbx,
-			'lbg':lbg,	    
-			'ubx':ubx,
-			'ubg':ubg,
-			'p':P,
-			'x0':ca.vertcat(initial_X,initial_con),                                      
-		   }
-	sol = solver(
-					
-				 x0=args['x0'],
-				   
-				 lbx=args['lbx'],
-				 ubx=args['ubx'],
-				
-				 lbg=args['lbg'],
-				 ubg=args['ubg'],
-				 p=args['p']
-					  
-				)           
-	X_U_sol = sol['x']
-	V = (X_U_sol[n_bound_var*(N+1)].full())[0][0]
-	omega = (X_U_sol[n_bound_var*(N+1)+1].full())[0][0]
-	omega_left_wheel = (V -omega*robot_dia)/wheel_rad                         
-	omega_right_wheel = (V +omega*robot_dia)/wheel_rad
-
-	omega_left_wheel = min(omega_left_wheel, omega_wheel_max)               
-	omega_left_wheel = max(omega_left_wheel, -1 * omega_wheel_max)          
-	omega_right_wheel = min(omega_right_wheel, omega_wheel_max)             
-	omega_right_wheel = max(omega_right_wheel, -1 * omega_wheel_max)        
-
-	motor_left.setVelocity(omega_left_wheel)             
-	motor_right.setVelocity(omega_right_wheel)           
-	x = gps.getValues()[0]
-	y = gps.getValues()[1]  
-	# print('X: ', x, ', Y:  ', y)                                                     
-	theta =IU.getRollPitchYaw()[0] + pi/2              ## Commented                           
-	if theta > pi :
-		theta = theta - 2*pi
-	theta_2 = theta
-	#theta =IU.getRollPitchYaw()[2]   ## Changed to 2
-	#theta_2 = IU.getRollPitchYaw()[2]
-	P[0:n_states] =([x,y,theta]) 
+		dst_3[3][i] = 1
 
 	
-		#############################################################
-	lidar_values = ld.getRangeImageArray()                                                         
-	
-		######                                                        
-	bot_x = x
-	
-	bot_y = y
-	
-	bot_theta = theta_2
-
-	for idx in range(35,635, 3):							
-		if lidar_values[int(idx)][0] <= 3.0:
-			# print('HERE')
-			dist, angle = lidar_values[int(idx)], idx*240/666-30
-			dist = dist[0]
-			if(dist==np.inf):
-				dist= -1000
-
-			coordRel = getPointRel(angle,dist)
-			x,y = transform(coordRel[0],coordRel[1],bot_theta,bot_x,bot_y)
-			x_int= int((x+5)*10+0.5)
-			y_int = int((y+5)*10+0.5)
-			# X.append(x_int)
-			# Y.append(y_int)
-			x_temp = x_int
-			y_temp=y_int
-			if(x_int<100 and y_int<100 and x_int>=0 and y_int>=0):
-				grid[x_int][y_int]=1
-	dst = grid & gridlines      
-
-	dst_2 = np.copy(dst)
-	for i in range(1, 99):
-		for j in range(1, 99):
-			middle_sum = dst[i][j] + dst[i-1][j] + dst[i+1][j] + dst[i][j-1] + dst[i][j+1] #+ dst[i-2][j] + dst[i+2][j] + dst[i][j-2] + dst[i][j+2]
-			corner_sum = dst[i-1][j-1] + dst[i+1][j+1] + dst[i-1][j+1] + dst[i+1][j-1] #+ dst[i-2][j-2] + dst[i+2][j+2] + dst[i-2][j+2] + dst[i+2][j-2]
-			
-			if not(middle_sum >= 2 and corner_sum == 0):
-				dst_2[i][j] = 0
-
-	grid = np.copy(dst_2)
-	dst_3 = np.copy(dst_2)
-
-	for i in range(1, 99):
-		for j in range(1, 99):
-			if(dst_2[i][j] == 1):
-				for k in range(-1 * wall_extra_width, wall_extra_width + 1):
-					for l in range(-1 * wall_extra_width, wall_extra_width + 1):
-						if (i + k < 100 and i + k >= 0 and j + l < 100 and j + l >=0):
-							dst_3[i+k][j+l] = 1
-	
-	# dst = dst_2
-	
-	for i in range(100):
-		for j in range(4):
-			dst_3[i][j] = 1
-			dst_3[i][100 - j - 1] = 1
-			dst_3[j][i] = 1
-			dst_3[100 - j - 1][i] = 1
-		
-		dst_3[4][i] = 1
-
-	# dst_4 = np.copy(dst_3).astype("float")				#
+	'''
+	For visualization
+	'''
 
 	for i in range(100):
 		for j in range(100):
@@ -752,235 +914,405 @@ while ( robot.step(timestep) != -1 ):
 	
 	x_bot_grid=int((bot_x+5)*10 + 0.5)				
 	y_bot_grid=int((bot_y+5)*10 + 0.5)				
-	dst_4[x_bot_grid][y_bot_grid] = 0.5                     #
-
-		#############
-
-	# cv2.imwrite('img1.png',(dst_4*255).astype('uint8'))
-	# cv2.waitKey(1)
-
-	if (ca.norm_2( P[0:n_states-1].reshape((n_states-1,1)) - path_last[0:n_states-1] ) < d_reastar) or counter >= 1000:     
-		#size=grid.shape
-		counter = 0																		
-		print('HERE')
-		map2d = Array2D(size[0], size[1])
-		for i in range(size[0]):
-			for j in range(size[1]):
-				map2d[i][j]=dst_3[j][i]     #
-		   
-			
-		
-		x1=(bot_x+5)*10 + 0.5                  
-		y1=(bot_y+5)*10 + 0.5                   				
-
-		## check pstart in obstacle
-		if dst_3[int(x1)][int(y1)] == 1:    #
-			for j in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
-				flag = 0
-				for k in range(-1 * a_star_correction_search_window, a_star_correction_search_window + 1):
-					if dst_3[int(x1) + j][int(y1) + k] == 0:
-						x1 = int(x1) + j
-						y1 = int(y1) + k
-						flag = 1
-						break
-				if flag:
-					break			
-		
-		
-		if current_waypoint_index == KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1] != current_waypoint_index:              ######
-			current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]                #######     
-			waypoint = all_waypoints[current_waypoint_index]
-		
-		print('Current Waypoint: ', waypoint)
-
-		pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
-
-		# if (abs(pStart.x - pEnd.x) <= waypoint_change_dist and abs(pStart.y - pEnd.y) <= waypoint_change_dist):
-		# 	if current_waypoint_index < len(all_waypoints) - 1:
-		# 		current_waypoint_index += 1
-		# 		waypoint = all_waypoints[current_waypoint_index]
-		# 		pEnd = Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
-
-		aStar = AStar(map2d, pStart, pEnd)
-		aStar.expansion(offset=0)
-		pathList = aStar.start()
-		#path=np.zeros((30,2), dtype ='f')	
-		if pathList:
-			path[0][0] = int(x1)                                                   
-			path[0][1] = int(y1)                                                   
-			i=1#0                                                                   			
-			for point in pathList:
-				if i==n_pts_picked:
-					break
-				path[i][0]= float(point.y)
-				path[i][1]= float(point.x)
-				dst_4[int(point.y)][int(point.x)] = 0.75   ####
-				i=i+1
-			print(i)
-			# if i<n_pts_picked:
-			# 	if i<=10 and current_waypoint_index < len(all_waypoints) - 1:
-			# 		current_waypoint_index += 1
-			# 		waypoint = all_waypoints[current_waypoint_index]
-			# 		pStart_2, pEnd_2 = pEnd, Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
-			# 		aStar = AStar(map2d, pStart, pEnd)
-			# 		aStar.expansion(offset=0)
-			# 		pathList = aStar.start()
-			# 		j=0
-			# 		for j in range(i, min(n_pts_picked, len(pathList) + i - 1)):
-			# 			path[j][0]=float(pathList[j-i].y)
-			# 			path[j][1]=float(pathList[j-i].x)
-					
-			# 		if j < n_pts_picked:
-			# 			for k in range(j, n_pts_picked):
-			# 				path[k][0]=path[k-1][0]
-			# 				path[k][1]=path[k-1][1]
-			# 	else:
-			# 		for j in range(i,n_pts_picked):
-			# 			path[j][0]=path[j-1][0]
-			# 			path[j][1]=path[j-1][1]
-			if i < n_pts_picked:
-				for j in range(i,n_pts_picked):
-					path[j][0]=path[j-1][0]
-					path[j][1]=path[j-1][1]
-
-			path = np.divide(path,10)
-			path = np.subtract(path,5)
-
-			path_last =  path[total_path_points-1,0:2]                              
-			#print( path_last ,"      ",waypoint
-			
-			# if ca.norm_2(path_last - waypoint) < 2.5:
-			# 	print( "***************************"
-			# 	d_reastar = error_allowed
-			# else:
-			# 	d_reastar = 0.8    
-
-			print(path)
-		else:
-			print("NO PATH")
+	dst_4[x_bot_grid][y_bot_grid] = 0.5
 
 
-	else:
-		counter += 1																
-		############################################################
 
-	x1=(bot_x+5)*10 + 0.5     
-	y1=(bot_y+5)*10 + 0.5     
-	pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
-	# if (abs(pStart.x - pEnd.x) <= waypoint_change_dist and abs(pStart.y - pEnd.y) <= waypoint_change_dist):
-	if len(all_waypoints) > 1:
-		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= waypoint_change_dist):
-			# if current_waypoint_index < len(all_waypoints) - 1:
-			# 	current_waypoint_index += 1
-			# 	waypoint = all_waypoints[current_waypoint_index]
-			# 	pEnd = Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
+def generate_path(start_x, start_y, end_x, end_y):
 
-			for i__ in range(len(all_waypoints)-1):                                                                                             #########
-				# print(i__)
-				if (np.sqrt(abs(bot_x - all_waypoints[i__][0]) ** 2 + abs(bot_y - all_waypoints[i__][1]) ** 2) <= waypoint_change_dist):
-					all_waypoints.pop(i__)
-					i__ -= 1
-					break
-
-			if len(all_waypoints) >1:                                                                                                              ####### 
-				current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]    #####
-				waypoint = all_waypoints[current_waypoint_index]
-			else:
-			    waypoint = all_waypoints[-1]                                                                                                           ####	
-	
-	else:
-		if (np.sqrt(abs(bot_x - waypoint[0]) ** 2 + abs(bot_y - waypoint[1]) ** 2) <= 0.25):
-			# if current_waypoint_index < len(all_waypoints) - 1:
-			# 	current_waypoint_index += 1
-			# 	waypoint = all_waypoints[current_waypoint_index]
-			# 	pEnd = Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5))
-
-			for i__ in range(len(all_waypoints)):
-				# print(i__)
-				if abs(pStart.x - int((all_waypoints[i__][1] + 5) * 10 + 0.5)) <= waypoint_change_dist and abs(pStart.y - int((all_waypoints[i__][0] + 5) * 10 + 0.5)) <= waypoint_change_dist:
-					all_waypoints.pop(i__)
-					i__ -= 1
-					break
-
-			if len(all_waypoints):
-				current_waypoint_index = current_waypoint_index = KDTree(((np.array(all_waypoints) + 5) * 10)).query(np.array([x1, y1]))[1]
-				waypoint = all_waypoints[current_waypoint_index]
+	pass
 
 
-	# cv2.imshow('w1',(dst_4*255).astype('uint8'))                            #
-	# cv2.waitKey(1)
-
-
-	if(len(all_waypoints) == 0):
-		print('Breaking from while loop')
+def mpc(target_x,target_y):																			
+	print (target_x,target_y)
+	n_states = 3
+	n_controls = 2
+	N = 10       																					
+	delta_T = 0.2 
+	X_target = np.array([target_x,target_y,0], dtype = 'f')                                                                                                                                                
+	error_allowed = 0.08 		 ###										                                                                                                                                                                  
+	Q_x = 100  																
+	Q_y = 100																	
+	R1 = 50    
+	R2 = 75
+	error_allowed_in_g = 1e-100   
+	n_bound_var = n_states                        
+	x_bound_max = 4.725                                                                                                                                                                              
+	x_bound_min = -4.725          
+	y_bound_max = 4.725          
+	y_bound_min = -4.725          
+	theta_bound_max = inf              
+	theta_bound_min = -inf             
+	omega_wheel_max = 10.15
+	robot_dia = 0.5
+	wheel_rad = 0.15
+	v_max = 1.5#omega_wheel_max*wheel_rad                                 
+	v_min = 0#-v_max    																				
+	omega_max = omega_wheel_max*wheel_rad/robot_dia	                            										
+	omega_min = -omega_max
+	global x,y,theta,V,omega
+	while (robot.step(timestep) != -1):     
+		x = gps.getValues()[0]
+		y = gps.getValues()[1]
+		theta =IU.getRollPitchYaw()[0]  + pi/2  
+		if theta > pi:
+			theta = theta - 2*pi
 		break
+	x_casadi =ca.SX.sym('x')                
+	y_casadi = ca.SX.sym('y')
+	theta_casadi = ca.SX.sym('theta')
+	states =np.array([(x_casadi),(y_casadi),(theta_casadi)]) 
+	n_states = states.size           
+	v_casadi =ca.SX.sym('v')
+	omega_casadi = ca.SX.sym('omega')
+	controls = np.array([v_casadi,omega_casadi])      
+	n_controls = controls.size      
+	rhs = np.array([v_casadi*ca.cos(theta_casadi),v_casadi*ca.sin(theta_casadi),omega_casadi]) 
+	f = ca.Function('f',[states,controls],[rhs]) 
+	U = ca.SX.sym('U', n_controls,N)
+	P = ca.SX.sym('P',1, n_states*2)
+	X =ca.SX.sym('X', n_states, N+1)
+	obj = 0
+	g = []
+	Q = ca.diagcat(Q_x, Q_y)                                                                                                                                                                         
+	R = ca.diagcat(R1, R2)    
+	for i in range(0,N):                                                                                                                                                           
+		cost_pred_st = ca.mtimes(  ca.mtimes( (X[0:n_states-1,i] - P[n_states:n_states*2-1].reshape((n_states-1,1)) ).T , Q )  ,  (X[0:n_states-1,i] - P[n_states:n_states*2-1].reshape((n_states-1,1)) )  )  + ca.mtimes(  ca.mtimes( (U[0:n_controls,i]).T , R )  ,  U[0:n_controls,i]  )  
+		obj = obj + cost_pred_st  
+	obj = obj + ca.mtimes(  ca.mtimes( (X[0:n_states-1,N] - P[n_states:n_states*2-1].reshape((n_states-1,1)) ).T , Q )  ,  (X[0:n_states-1,N] - P[n_states:n_states*2-1].reshape((n_states-1,1)) )  )   
+	pred_st = np.zeros((n_states,1))    
+	for i in range(0,N+1):                                                                                                                                                                        
+		if i == 0:
+			g = ca.vertcat( g,( X[0:n_states,i] - P[0:n_states].reshape((n_states,1)) )  )                                                                                       
+		else:
+			f_value = f(X[0:n_states,i-1],U[0:n_controls,i-1])      
+			pred_st = X[0:n_states,i-1] + delta_T*f_value           
+			g = ca.vertcat( g,(X[0:n_states,i] - pred_st[0:n_states].reshape((n_states,1)) )  )                                                                               
+	OPT_variables = X.reshape((n_states*(N+1),1))          
+	OPT_variables = ca.vertcat( OPT_variables, U.reshape((n_controls*N,1)) )          
+	nlp_prob ={
+		   'f':obj,
+		   'x':OPT_variables,
+		   'g':g,
+		   'p':P
+		  }
+	opts = {
+		 'ipopt':
+		{
+		  'max_iter': 100,
+		  'print_level': 0,
+		  'acceptable_tol': 1e-8,
+		  'acceptable_obj_change_tol': 1e-6
+		},
+		 'print_time': 0
+		   }
+	solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
+	lbg = ca.DM.zeros(((n_states)*(N+1),1))                                                                                                                           
+	ubg = ca.DM.zeros(((n_states)*(N+1),1))                                                                                                                           
+	lbg[0:(n_states)*(N+1)] = - error_allowed_in_g                                                                                                                    
+	ubg[0:(n_states)*(N+1)] =  error_allowed_in_g                                                                                                                     
+	lbx = ca.DM.zeros((n_states*(N+1) + n_controls*N,1)) 
+	ubx = ca.DM.zeros((n_states*(N+1) + n_controls*N,1)) 
+	lbx[0:n_bound_var*(N+1):3] = x_bound_min                       
+	ubx[0:n_bound_var*(N+1):3] = x_bound_max                       
+	lbx[1:n_bound_var*(N+1):3] = y_bound_min                       
+	ubx[1:n_bound_var*(N+1):3] = y_bound_max                       
+	lbx[2:n_bound_var*(N+1):3] = theta_bound_min                   
+	ubx[2:n_bound_var*(N+1):3] = theta_bound_max                       
+	lbx[n_bound_var*(N+1):(n_bound_var*(N+1)+n_controls*N):2] = v_min                        
+	ubx[(n_bound_var*(N+1)):(n_bound_var*(N+1)+n_controls*N):2] = v_max                      
+	lbx[(n_bound_var*(N+1)+1):(n_bound_var*(N+1)+n_controls*N):2] = omega_min                
+	ubx[(n_bound_var*(N+1)+1):(n_bound_var*(N+1)+n_controls*N):2] = omega_max                
+	X_init = np.array([x,y,theta], dtype = 'f')
+	P = np.concatenate((X_init, X_target))                                                                                                                                         
+	initial_X = ca.DM.zeros((n_states*(N+1)))                           
+	initial_X[0:n_bound_var*(N+1):3] = X_init[0]                        
+	initial_X[1:n_bound_var*(N+1):3] = X_init[1]                        
+	initial_X[2:n_bound_var*(N+1):3] = X_init[2]                        
+	initial_con = ca.DM.zeros((n_controls*N,1))                       
+	n_iter = 0
 
-																																### for dynamic path, we need to make sure that the path doesnot get changed inside the horizon length bcz we shifting points in P,not updating everytime from path
-	#print (x,"   ",y)	
-	# print(close_index)	
-	#if KDTree_func(path,x,y)  != close_index:                                               
-	close_index = KDTree_func(path,x,y)#KDTree(path).query(P[0:n_states-1])[1] 
-	# print (close_index)
-										
+	counter_ = 0
+	prev_error = 100000
 
-	if N+(close_index) < total_path_points : #and N+(close_index-1) < total_U_points                                    
+	while ( ca.norm_2( P[0:n_states-1].reshape((n_states-1)) - X_target[0:n_states-1] ) > error_allowed and robot.step(timestep) != -1 ) :       
 		
-		P[n_states:n_states*(N)] = P[n_states*2:n_states*(N+1)]                                                                                                                                                                                                               
-		P[n_states*(N):n_states*(N+1)-1] = path[N+(close_index-1),0:2]                                             
-		P[n_states*(N+1)-1] = math.atan( (path[N+(close_index-1)][1] - path[N+(close_index-1)-1][1])/(path[N+(close_index-1)][0] - path[N+(close_index-1)-1][0] + 1e-9) )           ###########
+		current_error = ca.norm_2( P[0:n_states-1].reshape((n_states-1)) - X_target[0:n_states-1] )
+		# print(current_error)
 
-		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                              
-		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                     
-		"""
-		P[n_states:n_states*(N+1):3] = path[close_index:N+close_index,0]                    
-		P[n_states+1:n_states*(N+1):3] = path[close_index:N+close_index,1]                  
+		if(abs(prev_error - current_error) <= 1e-3):  ####################################
+			counter_ += 1
+		else:
+			counter_ = 0
 
-		for i in range(0,N):                                                                
-			P[n_states*(i+1+1)-1] = math.atan( (path[i+close_index+1][1] - path[i+close_index][1])/(path[i+close_index+1][0] - path[i+close_index][0] + 1e-9) )           
-		  
-		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]  
-		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                 			"""								
+		if counter_ >= 500:
+			break
+
+		prev_error = current_error        
 		
+
+		n_iter += 1 
+		args = {
+			'lbx':lbx,
+			'lbg':lbg,	    
+			'ubx':ubx,
+			'ubg':ubg,
+			'p':P,
+			'x0':ca.vertcat(initial_X,initial_con),                                      
+		   }
+		sol = solver(
+					
+				 x0=args['x0'],
+				   
+				 lbx=args['lbx'],
+				 ubx=args['ubx'],
+				
+				 lbg=args['lbg'],
+				 ubg=args['ubg'],
+				 p=args['p']
+					  
+				)           
+		X_U_sol = sol['x']
+		V = (X_U_sol[n_bound_var*(N+1)].full())[0][0]
+		omega = (X_U_sol[n_bound_var*(N+1)+1].full())[0][0]
+		omega_left_wheel = (V -omega*robot_dia)/wheel_rad                         
+		omega_right_wheel = (V +omega*robot_dia)/wheel_rad
+
+		omega_left_wheel = min(omega_left_wheel, omega_wheel_max)       											   
+		omega_left_wheel = max(omega_left_wheel, -1 * omega_wheel_max)  
+		omega_right_wheel = min(omega_right_wheel, omega_wheel_max)
+		omega_right_wheel = max(omega_right_wheel, -1 * omega_wheel_max)
+
+		motor_left.setVelocity(omega_left_wheel)             
+		motor_right.setVelocity(omega_right_wheel)           
+		x = gps.getValues()[0]
+		y = gps.getValues()[1]                                                       
+		theta =IU.getRollPitchYaw()[0] + pi/2                                        
+		if theta > pi :
+			theta = theta - 2*pi
+
+		#########################################
+		# global ld
+		# lidar_values = ld.getRangeImageArray()
+
+		# bot_x = x
+		# bot_y = y
+		# bot_theta = theta
+		# update_map(lidar_values, bot_x, bot_y, bot_theta)
+		#########################################
+
+		P[0:n_states] =([x,y,theta])               
+		#print (V)
+		for i in range(0,N*n_bound_var):                          
+			initial_X[i] = X_U_sol[i+n_bound_var]                 
+		for i in range(0,(N-1)*n_controls):                     
+			initial_con[i] = X_U_sol[n_bound_var*(N+1)+i+n_controls]   
+		
+
+		# begin{please do not change}
+		gps_ee_vals = gps_ee.getValues()
+		robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
+		# end{please do not change}
+		
+		cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+		cv2.waitKey(1)
+
+	motor_left.setVelocity(0)             
+	motor_right.setVelocity(0)     
+	print("reached")
+
+
+
+
+
+	   
+
+# mpc(-2.5,-4.5)
+
+# pid(90*pi/180)	 
+
+# mpc(-2.5,-2.5)
+# pid(0*pi/180)
+# mpc(-0.5,-2.5)
+# pid(90*pi/180)
+# mpc(-0.5,-0.5)	
+
+# pid(-90*pi/180)
+
+
+#print('YOOOOOOOOOO___0')
+'''
+Main Loop
+'''
+while ( robot.step(timestep) != -1 ):
+
+
+	# print('YOOOOOOOOOO___-1')
+	x = gps.getValues()[0]
+	y = gps.getValues()[1]  
+
+	theta =IU.getRollPitchYaw()[0] + pi/2                          
+	if theta > pi :
+		theta = theta - 2*pi
+	theta_2 = theta
+
+
+	lidar_values = ld.getRangeImageArray()
+	bot_x = x
+	bot_y = y
+	bot_theta = theta_2
+
+	# print('BOT x, y, theta: ', bot_x, bot_y, bot_theta)
+
+
+	# print('YOOOOOOOOOO___1')
+	'''
+	Mapping
+	'''
+	update_map(lidar_values, bot_x, bot_y, bot_theta)
+
+	x1=(bot_x+5)*10 + 0.5              
+	y1=(bot_y+5)*10 + 0.5
+
+
+	# print('YOOOOOOOOOO___2')
+
+	# print(waypoint[0], waypoint[1], x1, y1)
+	# if(math.sqrt(((waypoint[0] + 5) * 10 - x1)**2 + ((waypoint[1] + 5) * 10 - y1)**2) <= waypoint_change_threshold):
+	#     waypoint_available_ =  change_waypoint(x1, y1)
+	#     print("WP_reached, New waypoint: ", waypoint)
+	#     if not (waypoint_available_):
+	#         break
+
+	waypoint_available = check_reached_waypoint(x1, y1)
+	if(waypoint_available == -1):
+		print('RUN COMPLETED')
+		break
+	elif(waypoint_available == 0):
+		print('GOING to LAST POINT')
+
+
+	# print('\nCURRENT WAYPOINT: ', waypoint)
+	# print()
+
+
+	# begin{please do not change}
+	gps_ee_vals = gps_ee.getValues()
+	robot.setCustomData(waypoints_string + ' ' + str(gps_ee_vals[0]) + ' ' + str(gps_ee_vals[1]))
+	# end{please do not change}
+
+
+
+	'''
+	A star
+	'''
+	pStart, pEnd = Point(int(y1),int(x1)), Point(int((waypoint[1]+5)*10 + 0.5),int((waypoint[0]+5)*10 + 0.5)) 
+
+	size=(100, 100)
+	map2d = Array2D(size[0], size[1])
+	for i in range(size[0]):
+		for j in range(size[1]):
+			map2d[i][j]=dst_3[j][i]
 	
+
+	aStar = AStar(map2d, pStart, pEnd)
+	aStar.expansion(offset=0)
+	end_point = aStar.start()
+	# print("END Point: ", end_point.y, end_point.x, "Bot current point: ", x1, y1)
+	end_point.x, end_point.y = end_point.y, end_point.x 	
+
+	# pid(bot_theta + 5 * pi / 180)
+	
+	# arm_1.setPosition(1.375)
+	# arm_2.setPosition(1.02)
+	# arm_3.setPosition(-3.29)
+	# arm_4.setPosition(2.29)#-3.46)
+
+
+	print("CURRENT WAYPOINT: ", (np.array(waypoint)+5)*10)
+
+
+	'''
+	PID
+	'''
+	bot_angle_ = 0
+	bot_theta = bot_theta * 180 / pi
+	# if(abs(bot_theta - 90) <= bot_angular_resolution):
+	#     bot_angle_ = 90
+	# elif(abs(bot_theta + 90) <= bot_angular_resolution):
+	#     bot_angle_ = -90
+	# elif(abs(bot_theta - 0) <= bot_angular_resolution):
+	#     bot_angle_ = 0
+	# elif((abs(bot_theta - 180) <= bot_angular_resolution) or (abs(bot_theta + 180) <= bot_angular_resolution)):
+	#     bot_angle_ = 180
+
+	bot_angle_ = bot_theta
+
+	
+	x1_rounded = x1 - x1 % 10 + 5
+	y1_rounded = y1 - y1 % 10 + 5
+
+	req_angle = np.arctan2(end_point.y - y1_rounded, end_point.x - x1_rounded) * 180 / pi
+
+	# print("REQUIRED ANGLE: ", req_angle)
+
+	call_pid_ = 0
+
+	if(abs(req_angle - 90) <= bot_angular_resolution):
+		req_angle = 90
+		call_pid_ = 1
+	elif(abs(req_angle + 90) <= bot_angular_resolution):
+		req_angle = -90
+		call_pid_ = 1
+	elif(abs(req_angle - 0) <= bot_angular_resolution):
+		req_angle = 0
+		call_pid_ = 1
+	elif((abs(req_angle - 180) <= bot_angular_resolution) or (abs(req_angle + 180) <= bot_angular_resolution)):
+		req_angle = 180
+		call_pid_ = 1
+
+
+	print("ANGLE: ", bot_angle_, req_angle)
+	#if(bot_angle_ == req_angle):
+	if(abs(bot_angle_ - req_angle) < 1):
+		pass
 	else:
-		#print( "ELSEEEEEEEEE  ", close_index,"   ", P[n_states:n_states*2])
-		P[n_states:n_states*(N)] = P[n_states*2:n_states*(N+1)]                                                                     
-		P[n_states*(N):n_states*(N+1)-1] = path[(total_path_points-1),0:2]                                                                                                                                                                                                                      
-		P[n_states*(N+1)-1] = math.atan( (path[total_path_points-1][1] - path[total_path_points-1-1][1])/(path[total_path_points-1][0] - path[total_path_points-1-1][0]+ 1e-9) )    
+		if (call_pid_ == 1):
+			if (req_angle == 180):
+				if (bot_angle_ < 0):
+					req_angle = -179.99
+			print('Calling PID for angle: ', req_angle)
+			pid(req_angle * pi / 180)
+			continue
+	
+	
+	'''
+	MPC
+	'''
+	# if(math.sqrt(((waypoint[0] + 5) * 10 - x1)**2 + ((waypoint[1] + 5) * 10 - y1)**2) <= waypoint_change_threshold):
+	#     waypoint_available_ =  change_waypoint(x1, y1)
+	#     print("WP_reached, New waypoint: ", waypoint)
+	#     if not (waypoint_available_):
+	#         break
+
+	waypoint_changed_ = check_reached_waypoint(x1, y1)
+
+	if(waypoint_changed_ == 2):
+		continue
+	elif(waypoint_changed_ == -1):
+		print('RUN COMPLETED')
+		break
+	# elif(waypoint_changed_ == 0):
+	#     print('GOING to LAST POINT')
+	else:
+	   
+		end_point.x = float((end_point.x / 10.0) - 5)
+		end_point.y = float((end_point.y / 10.0) - 5)
 		
-		P[n_states*(N+1):n_states*(N+1)+n_controls*(N-1)]= P[n_states*(N+1)+n_controls:n_states*(N+1)+n_controls*(N)]                                                                                                                                                                                                                  
-		P[n_states*(N+1)+n_controls*(N-1):n_states*(N+1)+n_controls*(N)] = U_ref                                                                                      
-
-
-
-	# print( "Odometry = " , P[0:n_states]
-	# print( V, "    ", omega )
-
-
-	for i in range(0,N*n_bound_var):                          
-		initial_X[i] = X_U_sol[i+n_bound_var]                 
-	for i in range(0,(N-1)*n_controls):                     
-		initial_con[i] = X_U_sol[n_bound_var*(N+1)+i+n_controls]   
-						 
-#############################################################################
-
-t_end = time.time()
-print( "Total Time taken = " , t_end - t_start)
-motor_left.setVelocity(0)             
-motor_right.setVelocity(0)            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+		mpc(end_point.x, end_point.y)
+		
+  
+	cv2.imwrite("map.jpg", (dst_4*255).astype(np.uint8))
+	cv2.imshow('w1', (dst_4*255).astype(np.uint8))
+	cv2.waitKey(1)
+		
