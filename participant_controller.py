@@ -220,15 +220,61 @@ if (len(waypoints_split) != 20):
 # print('Waypoints:', all_waypoints)
 
 
+
+
 '''
 Daughter Waypoints
 '''
 daughter_waypoints = []
 for i in range(0,len(all_waypoints)):
-	daughter_waypoints.append([all_waypoints[i][0]+1,all_waypoints[i][1]])
-	daughter_waypoints.append([all_waypoints[i][0]-1,all_waypoints[i][1]])
-	daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]+1])
-	daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]-1])
+
+	if(all_waypoints[i][0]+1 >=-5 and all_waypoints[i][0]+1 <5 and all_waypoints[i][1] >=-5 and all_waypoints[i][1] <5):
+		daughter_waypoints.append([all_waypoints[i][0]+1,all_waypoints[i][1]])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+	
+	if(all_waypoints[i][0]-1 >=-5 and all_waypoints[i][0]-1 <5 and all_waypoints[i][1] >=-5 and all_waypoints[i][1] <5):
+		daughter_waypoints.append([all_waypoints[i][0]-1,all_waypoints[i][1]])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+	
+	if(all_waypoints[i][0] >=-5 and all_waypoints[i][0] <5 and all_waypoints[i][1] + 1 >=-5 and all_waypoints[i][1] + 1 <5):
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1] + 1])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+	
+	if(all_waypoints[i][0] >=-5 and all_waypoints[i][0] <5 and all_waypoints[i][1] - 1 >=-5 and all_waypoints[i][1] - 1 <5):
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1] - 1])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+	
+
+	if(all_waypoints[i][0]+1 >=-5 and all_waypoints[i][0]+1 <5 and all_waypoints[i][1] + 1 >=-5 and all_waypoints[i][1] + 1<5):
+		daughter_waypoints.append([all_waypoints[i][0]+1,all_waypoints[i][1]+1])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+	
+	if(all_waypoints[i][0]-1 >=-5 and all_waypoints[i][0]-1 <5 and all_waypoints[i][1]-1 >=-5 and all_waypoints[i][1]-1 <5):
+		daughter_waypoints.append([all_waypoints[i][0]-1,all_waypoints[i][1]-1])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+	
+	if(all_waypoints[i][0]+1 >=-5 and all_waypoints[i][0]+1 <5 and all_waypoints[i][1] - 1 >=-5 and all_waypoints[i][1] - 1 <5):
+		daughter_waypoints.append([all_waypoints[i][0]+1,all_waypoints[i][1] - 1])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+	
+	if(all_waypoints[i][0]-1 >=-5 and all_waypoints[i][0]-1 <5 and all_waypoints[i][1] + 1 >=-5 and all_waypoints[i][1] + 1 <5):
+		daughter_waypoints.append([all_waypoints[i][0]-1,all_waypoints[i][1] + 1])
+	else:
+		daughter_waypoints.append([all_waypoints[i][0],all_waypoints[i][1]])
+
+
+
+	# daughter_waypoints.append([all_waypoints[i][0]+1,all_waypoints[i][1]+1])
+	# daughter_waypoints.append([all_waypoints[i][0]-1,all_waypoints[i][1]-1])
+	# daughter_waypoints.append([all_waypoints[i][0]+1,all_waypoints[i][1]-1])
+	# daughter_waypoints.append([all_waypoints[i][0]-1,all_waypoints[i][1]+1])
 
 current_waypoint_index = 0
 waypoint = daughter_waypoints[current_waypoint_index]
@@ -278,8 +324,8 @@ def pop_and_arm(index, x, y):
 	# 	daughter_waypoints.pop(4*d+2)
 	# 	daughter_waypoints.pop(4*d+3)
 
-	a = index % 4
-	d = int(index / 4)
+	a = index % 8
+	d = int(index / 8)
 
 	print("PARENT WAYPOINT: ", all_waypoints[d])
 	print("DAUGHTER: ", daughter_waypoints[d])
@@ -304,20 +350,36 @@ def pop_and_arm(index, x, y):
 	elif(a == 2):
 		print("Calling PID for angle: ", -90)
 		pid(-1 * pi/2)
-	else:
+	elif(a == 3):
 		print("Calling PID for angle: ", 90)
 		pid(pi/2)
+	elif(a == 4):
+		print("Calling PID for angle: ", -135)
+		pid((-135) * pi / 180)
+	elif(a == 5):
+		print("Calling PID for angle: ", 45)
+		pid((45) * pi / 180)
+	elif(a == 6):
+		print("Calling PID for angle: ", 135)
+		pid((135) * pi / 180)
+	else:
+		print("Calling PID for angle: ", -45)
+		pid((-45) * pi / 180)
 	
 
 	print("LEN of daughter waypoints (in func) (before): ", len(daughter_waypoints))
 	print("Daughter waypoints (in func) (before): \n", daughter_waypoints)
 
-	print("POPING: ", daughter_waypoints[4*d], daughter_waypoints[4*d+1], daughter_waypoints[4*d+2], daughter_waypoints[4*d+3])
+	# print("POPING: ", daughter_waypoints[4*d], daughter_waypoints[4*d+1], daughter_waypoints[4*d+2], daughter_waypoints[4*d+3])
 
-	daughter_waypoints.pop(4*d)
-	daughter_waypoints.pop(4*d)
-	daughter_waypoints.pop(4*d)
-	daughter_waypoints.pop(4*d)
+	daughter_waypoints.pop(8*d)
+	daughter_waypoints.pop(8*d)
+	daughter_waypoints.pop(8*d)
+	daughter_waypoints.pop(8*d)
+	daughter_waypoints.pop(8*d)
+	daughter_waypoints.pop(8*d)
+	daughter_waypoints.pop(8*d)
+	daughter_waypoints.pop(8*d)
 
 	all_waypoints.pop(d)
 
@@ -358,7 +420,8 @@ def pop_and_arm(index, x, y):
 	arm_1.setPosition(1.57)
 	arm_2.setPosition(0)
 	arm_3.setPosition(-3.2)
-	arm_4.setPosition(0.6)
+	# arm_4.setPosition(0.6)
+	arm_4.setPosition(0.0)
 	robot.step(timestep)
 		# break
 
@@ -459,8 +522,8 @@ def check_reached_waypoint(x1, y1):
 	global waypoint
 
 	# Poping waypoint
-	if(len(daughter_waypoints) > 1):
-		for i in range(len(daughter_waypoints) - 4):
+	if(len(daughter_waypoints)):
+		for i in range(len(daughter_waypoints)):
 			if(math.sqrt(((daughter_waypoints[i][0] + 5) * 10 - x1)**2 + ((daughter_waypoints[i][1] + 5) * 10 - y1)**2) <= waypoint_change_threshold):
 				# print("REACHED Waypoint: ", daughter_waypoints[i])
 				# daughter_waypoints.pop(i)
@@ -475,9 +538,9 @@ def check_reached_waypoint(x1, y1):
 				return -1
 
 	# Finding new waypoint
-	if(len(daughter_waypoints) > 1):
+	if(len(daughter_waypoints)):
 		# new_waypoint_index = KDTree(((np.array(daughter_waypoints[:-1]) + 5) * 10)).query(np.array([x1, y1]))[1]           #####
-		new_waypoint_index = KDTree_manual((np.array(daughter_waypoints[:-4]) + 5) * 10, x1, y1)
+		new_waypoint_index = KDTree_manual((np.array(daughter_waypoints) + 5) * 10, x1, y1)
 		waypoint = daughter_waypoints[new_waypoint_index]
 
 		print("NEW WAYPOINT: ", waypoint)
@@ -488,7 +551,11 @@ def check_reached_waypoint(x1, y1):
 		else:
 			return 1
 	else:
-		waypoint = daughter_waypoints[-1]
+		# waypoint = daughter_waypoints[-1]
+		current_waypoint_index = KDTree_manual((np.array(daughter_waypoints) + 5) * 10, x1, y1)
+		waypoint = daughter_waypoints[current_waypoint_index]
+
+		print("NEW WAYPOINT: ", waypoint)
 		return 0
 
 
@@ -1376,17 +1443,45 @@ while ( robot.step(timestep) != -1 ) and SPENT_TIME < MAXIMUM_TIME:
 
 	print("ANGLE: ", bot_angle_, req_angle)
 	#if(bot_angle_ == req_angle):
-	if(abs(bot_angle_ - req_angle) < 1):
-		pass
-	else:
-		if (call_pid_ == 1):
-			# if (req_angle == 180):
-			# 	if (bot_angle_ < 0):
-			# 		req_angle = -179.99
-			print('Calling PID for angle: ', req_angle)
-			pid(req_angle * pi / 180)
-			continue
+	# if(abs(bot_angle_ - req_angle) < 1):
+	# 	pass
+	# else:
+	# 	# if (call_pid_ == 1):
+	# 		# if (req_angle == 180):
+	# 		# 	if (bot_angle_ < 0):
+	# 		# 		req_angle = -179.99
+	# 		print('Calling PID for angle: ', req_angle)
+	# 		pid(req_angle * pi / 180)
+	# 		continue
 	
+	pid(req_angle * pi / 180)
+
+	x = gps.getValues()[0]
+	y = gps.getValues()[1]  
+
+	theta =IU.getRollPitchYaw()[0] + pi/2                          
+	if theta > pi :
+		theta = theta - 2*pi
+	theta_2 = theta
+
+
+	lidar_values = ld.getRangeImageArray()
+	bot_x = x
+	bot_y = y
+	bot_theta = theta_2
+
+	# print('BOT x, y, theta: ', bot_x, bot_y, bot_theta)
+
+
+	# print('YOOOOOOOOOO___1')
+	'''
+	Mapping
+	'''
+	update_map(lidar_values, bot_x, bot_y, bot_theta)
+
+	x1=(bot_x+5)*10 + 0.5              
+	y1=(bot_y+5)*10 + 0.5
+
 	
 	'''
 	MPC
@@ -1410,8 +1505,15 @@ while ( robot.step(timestep) != -1 ) and SPENT_TIME < MAXIMUM_TIME:
 	   
 		end_point.x = float((end_point.x / 10.0) - 5)
 		end_point.y = float((end_point.y / 10.0) - 5)
-		
-		mpc(end_point.x, end_point.y)
+
+		x_temp = float((x1 / 10.0) - 5)
+		y_temp = float((y1 / 10.0) - 5)
+
+		if(math.sqrt((end_point.x - x_temp) ** 2 + (end_point.y - y_temp) ** 2) < 0.08):
+			motor_left.setVelocity(-0.2)             
+			motor_right.setVelocity(-0.2)
+		else:
+			mpc(end_point.x, end_point.y)
 		
   
 	# cv2.imwrite("map.jpg", (dst_4*255).astype(np.uint8))
