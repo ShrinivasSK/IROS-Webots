@@ -12,7 +12,7 @@ This repository is part of the [2021 IROS-RSJ Robotic Challenge for Young Studen
 - For the Controller, we have implemented MPC (Model Predictive Control) for path tracking. 
 
 ## Visualisation
-While mapping the environment, we also display the location of the bot on the map and the path generated from A-star that it has to follow. 
+While mapping the  environment, we also display the location of the bot on the map and the path generated from A-star that it has to follow. 
 Following is an image of the same.
 
 ![Visualisation](img.png)
