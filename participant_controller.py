@@ -31,7 +31,7 @@ arm_wait_counter = 125
 pi = math.pi
 t_start = time.time()
 inf = np.inf
-# from controller import Robot
+#   from controller import Robot
 # robot = Robot()
 # timestep = int(robot.getBasicTimeStep())
 motor_left = robot.getDevice('wheel_left_joint')
